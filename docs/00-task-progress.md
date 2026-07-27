@@ -10,10 +10,10 @@
 | 前期文档 | D02 | 游戏设计文档 | `docs/02-game-design.md` | P0 | 已完成 | 核心玩法、变量、章节、结局清楚 | 本文档包已生成 |
 | 前期文档 | D03 | 交互设计文档 | `docs/03-interaction-design.md` | P0 | 已完成 | 页面流程、交互状态、存档、移动端规则清楚 | 本文档包已生成 |
 | 前期文档 | D04 | UI 与视觉效果文档 | `docs/04-ui-visual-spec.md` | P0 | 已完成 | 视觉方向、字体、图标库、页面效果、素材需求清楚 | 本文档包已生成 |
-| 前期准备 | P01 | 生成页面 UI 效果图 | `/design/ui/*.png` 或 `/docs/ui-mockups.md` | P1 | 未开始 | 开始页、游戏页、结局页至少各 1 张 | 可用 AI 生成或手动画 wireframe |
-| 前期准备 | P02 | 生成背景图与插画 | `src/assets/backgrounds/*` | P1 | 未开始 | 至少 6 张统一风格背景图 | 避免图片内出现文字 |
-| 工程基础 | E01 | 初始化项目 | Vite + React + TypeScript 项目 | P0 | 未开始 | `npm install`、`npm run dev`、`npm run build` 成功 | 不接真实 AI API |
-| 工程基础 | E02 | 建立基础页面 | Start/Game/Ending 三个页面 | P0 | 未开始 | 能从开始页进入游戏页，再进入结局页 | 可先用假数据 |
+| 前期准备 | P01 | 生成页面 UI 效果图 | `/design/ui/*.png` 或 `/docs/ui-mockups.md` | P1 | 已完成 | 开始页、游戏页、结局页至少各 1 张 | 已用chatGPT生成 |
+| 前期准备 | P02 | 生成背景图与插画 | `src/assets/backgrounds/*` | P1 | 已完成 | 至少 6 张统一风格背景图 | 已用chatGPT生成 |
+| 工程基础 | E01 | 初始化项目 | Vite + React + TypeScript 项目 | P0 | 已完成 | `npm install`、`npm run dev`、`npm run build` 成功 | Vite + React + TypeScript 已初始化，`npm run build` 已通过；未接真实 AI API，GitHub Pages base 路径留到部署阶段 |
+| 工程基础 | E02 | 建立基础页面 | Start/Game/Ending 三个页面 | P0 | 已完成 | 能从开始页进入游戏页，再进入结局页 | 三页基础流转已打通，占位内容放在 `src/data/demoFlow.ts`；正式章节、变量、结局与存档等游戏系统将在后续阶段实现 |
 | 数据系统 | G01 | 剧情数据结构 | `src/data/story.json`、类型定义 | P0 | 未开始 | 章节、文本、选项、变量影响可从数据驱动 | 文案不要硬编码在组件里 |
 | 数据系统 | G02 | 状态与变量系统 | `Stats`、选择记录、当前章节 | P0 | 未开始 | 点击选择后变量正确变化 | 变量包括 gentleness/honesty/control/selfAcceptance |
 | 内容实现 | C01 | 写入正式剧情 | 序章 + 五章剧情 | P0 | 未开始 | 每章 3–6 段文本、3–4 个选项 | 文风克制、心理寓言感 |
