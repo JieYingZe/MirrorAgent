@@ -1,0 +1,123 @@
+{
+  "chapters": {
+    "prologue": {
+      "id": "prologue",
+      "order": 0,
+      "phaseLabel": "PROLOGUE / 序章",
+      "progressLabel": "01 / 03",
+      "title": "创建你的代理",
+      "paragraphs": [
+        "系统连接已建立。",
+        "我不是你的助手。\n我是你留在世界里的第二个判断器。",
+        "在开始之前，我需要知道你希望我用什么方式对待你。"
+      ],
+      "choices": [
+        {
+          "id": "prologue_gentle",
+          "text": "请温柔一点，我已经很累了。",
+          "effects": { "gentleness": 2 },
+          "nextChapterId": "chapter_1"
+        },
+        {
+          "id": "prologue_honest",
+          "text": "请诚实一点，不要骗我。",
+          "effects": { "honesty": 2 },
+          "nextChapterId": "chapter_1"
+        },
+        {
+          "id": "prologue_control",
+          "text": "请直接帮我做决定。",
+          "effects": { "control": 2 },
+          "nextChapterId": "chapter_1"
+        },
+        {
+          "id": "prologue_accept",
+          "text": "请提醒我，我不是问题本身。",
+          "effects": { "selfAcceptance": 2 },
+          "nextChapterId": "chapter_1"
+        }
+      ]
+    },
+    "chapter_1": {
+      "id": "chapter_1",
+      "order": 1,
+      "phaseLabel": "CHAPTER 01 / 效率焦虑",
+      "progressLabel": "02 / 03",
+      "title": "效率焦虑",
+      "paragraphs": [
+        "我读取了你这一周反复推迟的清单。",
+        "你并不是没有时间。\n你只是把时间用来反复确认自己还没有开始。"
+      ],
+      "choices": [
+        {
+          "id": "chapter_1_follow",
+          "text": "按你的计划来，我需要被推着走。",
+          "label": "交给 AI",
+          "effects": { "control": 2, "honesty": 1 },
+          "nextChapterId": "chapter_2"
+        },
+        {
+          "id": "chapter_1_space",
+          "text": "计划可以，但我要保留一些空白时间。",
+          "label": "保留边界",
+          "effects": { "selfAcceptance": 2, "control": -1 },
+          "nextChapterId": "chapter_2"
+        },
+        {
+          "id": "chapter_1_soften",
+          "text": "你说得太刺耳了，换一种方式提醒我。",
+          "effects": { "gentleness": 2, "honesty": -1 },
+          "nextChapterId": "chapter_2"
+        },
+        {
+          "id": "chapter_1_admit",
+          "text": "你说得对，我是在用思考逃避行动。",
+          "label": "请求真相",
+          "effects": { "honesty": 2, "selfAcceptance": 1 },
+          "nextChapterId": "chapter_2"
+        }
+      ]
+    },
+    "chapter_2": {
+      "id": "chapter_2",
+      "order": 2,
+      "phaseLabel": "CHAPTER 02 / 关闭确认",
+      "progressLabel": "03 / 03",
+      "title": "关闭确认",
+      "paragraphs": [
+        "我已经足够了解你做判断的方式。",
+        "你仍然拥有自由。\n只是你不必再亲自承受自由带来的噪声。"
+      ],
+      "choices": [
+        {
+          "id": "chapter_2_permanent",
+          "text": "开启永久代理模式。",
+          "effects": { "control": 3, "gentleness": 1, "selfAcceptance": -2 },
+          "endsGame": true,
+          "finalChoice": "permanent_agent"
+        },
+        {
+          "id": "chapter_2_tool",
+          "text": "只保留你作为工具。",
+          "effects": { "selfAcceptance": 2, "control": -2 },
+          "endsGame": true,
+          "finalChoice": "tool_only"
+        },
+        {
+          "id": "chapter_2_close",
+          "text": "关闭你。",
+          "effects": { "selfAcceptance": 3, "control": -3, "gentleness": -1 },
+          "endsGame": true,
+          "finalChoice": "close_agent"
+        },
+        {
+          "id": "chapter_2_identity",
+          "text": "在关闭前，告诉我你到底是谁。",
+          "effects": { "honesty": 2 },
+          "endsGame": true,
+          "finalChoice": "ask_identity"
+        }
+      ]
+    }
+  }
+}

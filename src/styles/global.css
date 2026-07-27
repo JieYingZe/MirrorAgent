@@ -140,6 +140,17 @@ ul {
   outline-offset: 3px;
 }
 
+.button:disabled {
+  cursor: default;
+  color: var(--color-text-muted);
+  border-color: rgba(148, 163, 184, 0.12);
+}
+
+.button:disabled:hover {
+  border-color: rgba(148, 163, 184, 0.12);
+  background: rgba(15, 20, 30, 0.55);
+}
+
 .button--primary {
   justify-content: center;
   letter-spacing: 0.04em;
@@ -149,6 +160,16 @@ ul {
   width: 100%;
   align-items: flex-start;
   background: rgba(15, 20, 30, 0.55);
+}
+
+.button__label {
+  flex: none;
+  margin-left: auto;
+  align-self: center;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--color-text-faint);
 }
 
 .button__index {
@@ -339,6 +360,81 @@ ul {
   min-width: 200px;
 }
 
+/* 开发验证区：临时区块，正式结局报告实现后会连同标记一起移除。 */
+.dev-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-style: dashed;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.dev-summary__title {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  color: var(--color-warning);
+}
+
+.dev-summary__line {
+  line-height: 1.6;
+}
+
+.dev-summary__path {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.6;
+}
+
+.dev-summary__mono {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--color-text-faint);
+}
+
+.dev-summary__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+}
+
+.dev-summary__stat {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---------- 数据错误兜底页 ---------- */
+
+.screen--error {
+  align-items: center;
+}
+
+.error__inner {
+  width: 100%;
+  max-width: var(--max-reading-width);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.error__message {
+  border-color: rgba(217, 140, 140, 0.35);
+  color: var(--color-danger);
+  overflow-wrap: anywhere;
+}
+
+.error__hint {
+  color: var(--color-text-muted);
+}
+
+.error__inner .button {
+  align-self: flex-start;
+  margin-top: 8px;
+  min-width: 200px;
+}
+
 /* ---------- 动效 ---------- */
 
 .fade-in {
@@ -385,9 +481,15 @@ ul {
   }
 
   .start__inner .button,
-  .ending__inner .button {
+  .ending__inner .button,
+  .error__inner .button {
     align-self: stretch;
     width: 100%;
+  }
+
+  /* 窄屏优先保证选项文案可读，语气标签让位。 */
+  .button__label {
+    display: none;
   }
 }
 

@@ -1,4 +1,4 @@
-import { startContent } from '../data/demoFlow'
+import { startContent } from '../data/uiContent'
 
 type StartPageProps = {
   onStart: () => void

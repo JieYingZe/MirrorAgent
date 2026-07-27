@@ -14,8 +14,8 @@
 | 前期准备 | P02 | 生成背景图与插画 | `src/assets/backgrounds/*` | P1 | 已完成 | 至少 6 张统一风格背景图 | 已用chatGPT生成 |
 | 工程基础 | E01 | 初始化项目 | Vite + React + TypeScript 项目 | P0 | 已完成 | `npm install`、`npm run dev`、`npm run build` 成功 | Vite + React + TypeScript 已初始化，`npm run build` 已通过；未接真实 AI API，GitHub Pages base 路径留到部署阶段 |
 | 工程基础 | E02 | 建立基础页面 | Start/Game/Ending 三个页面 | P0 | 已完成 | 能从开始页进入游戏页，再进入结局页 | 三页基础流转已打通，占位内容放在 `src/data/demoFlow.ts`；正式章节、变量、结局与存档等游戏系统将在后续阶段实现 |
-| 数据系统 | G01 | 剧情数据结构 | `src/data/story.json`、类型定义 | P0 | 未开始 | 章节、文本、选项、变量影响可从数据驱动 | 文案不要硬编码在组件里 |
-| 数据系统 | G02 | 状态与变量系统 | `Stats`、选择记录、当前章节 | P0 | 未开始 | 点击选择后变量正确变化 | 变量包括 gentleness/honesty/control/selfAcceptance |
+| 数据系统 | G01 | 剧情数据结构 | `src/data/story.json`、类型定义 | P0 | 已完成 | 章节、文本、选项、变量影响可从数据驱动 | 已在 `src/types/game.ts` 建立剧情与选项类型；已建立本地 `story.json` 数据；章节、段落、选项和变量影响完全由数据驱动，组件不再持有剧情文案；当前为开发阶段示例内容（序章 + 2 章），正式剧情留待 C01 |
+| 数据系统 | G02 | 状态与变量系统 | `Stats`、选择记录、当前章节 | P0 | 已完成 | 点击选择后变量正确变化 | 已建立四变量初始状态（全部为 0）；已通过 `src/utils/gameState.ts` 实现不可变累计更新；已记录选择路径、当前章节与 `finalChoice`；当前状态仅存于内存，localStorage 留待 I03；两条验证路径变量结果均与数据一致 |
 | 内容实现 | C01 | 写入正式剧情 | 序章 + 五章剧情 | P0 | 未开始 | 每章 3–6 段文本、3–4 个选项 | 文风克制、心理寓言感 |
 | 内容实现 | C02 | 结局文案 | 5 个结局 | P0 | 未开始 | 每个结局都有标题、正文、AI 镜像报告 | 结局是传播重点 |
 | 规则实现 | R01 | 结局判断逻辑 | `src/utils/getEnding.ts` | P0 | 未开始 | 不同路径能触发不同结局 | mirror_trap 有优先级 |
