@@ -2,7 +2,6 @@
  * 非剧情的界面文案。
  *
  * 剧情节点、文本块和选项一律来自 src/data/story/，不放在这里。
- * 状态面板与结局报告标题目前仍是占位内容，会在 I02 / C02 阶段被正式实现替换。
  */
 
 export const startContent = {
@@ -19,15 +18,21 @@ export const gameContent = {
   endingGateAction: '查看镜像报告',
 }
 
-/** 静态占位；正式的状态文案映射属于 I02。 */
-export const statusPanelPlaceholder = {
+/**
+ * AI 状态面板的框架文案。
+ *
+ * 四个状态项的标签与文案由变量映射推导，见 src/utils/aiStatus.ts；
+ * 这里只保留标题、无障碍名称和系统提示语。
+ */
+export const statusPanelContent = {
   title: 'MIRROR AGENT STATUS',
-  items: [
-    { label: '语气', value: '校准中' },
-    { label: '反馈', value: '等待输入' },
-    { label: '权限', value: '工具模式' },
-    { label: '自我边界', value: '尚未建立' },
-  ],
+  ariaLabel: 'AI 状态面板',
+  hints: {
+    /** 普通节点。 */
+    normal: '参数校准持续运行',
+    /** 节点 ui.mode 为 control 时（第四章失控段落）。 */
+    control: '权限边界审查中',
+  },
 }
 
 /** 结局页的框架文案；五个结局的正文与镜像报告属于 C02。 */

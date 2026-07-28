@@ -493,6 +493,9 @@ ul {
 
 .status {
   padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .status__title {
@@ -504,9 +507,10 @@ ul {
 }
 
 .status__list {
-  margin-top: 14px;
   display: flex;
   flex-direction: column;
+  /* 状态文案变化时列表会重新挂载，这里播放一次很短的刷新感。 */
+  animation: status-refresh 200ms ease both;
 }
 
 .status__item {
@@ -520,12 +524,42 @@ ul {
 }
 
 .status__item dt {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
   color: var(--color-text-faint);
+  white-space: nowrap;
 }
 
 .status__item dd {
   color: var(--color-text-muted);
   text-align: right;
+}
+
+.status__hint {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: var(--color-text-faint);
+}
+
+/* control 模式只改边框和提示语颜色，不加红块、不闪烁。 */
+.status[data-mode='control'] {
+  border-color: rgba(217, 180, 140, 0.3);
+}
+
+.status[data-mode='control'] .status__title,
+.status[data-mode='control'] .status__hint {
+  color: var(--color-warning);
+}
+
+@keyframes status-refresh {
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* ---------- EndingPage ---------- */
@@ -676,6 +710,24 @@ ul {
 
   .status {
     order: 1;
+  }
+
+  /* 单列布局下面板改成紧凑卡片：两列状态项，不抢首屏高度。 */
+  .status__list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
+  }
+
+  .status__item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 8px 0;
+  }
+
+  .status__item dd {
+    text-align: left;
   }
 }
 

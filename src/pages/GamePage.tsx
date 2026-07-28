@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { Stats } from '../types/game'
 import type {
   StoryBlock,
   StoryChapterMeta,
@@ -8,19 +9,27 @@ import type {
 } from '../types/story'
 import { StoryBlockList } from '../components/story/StoryBlockRenderer'
 import { ChoiceList } from '../components/story/ChoiceList'
+import { AiStatusPanel } from '../components/status/AiStatusPanel'
 import {
   getChapterPhaseLabel,
   getChapterProgressLabel,
   getVisibleBlocks,
   getVisibleChoices,
 } from '../utils/story'
-import { gameContent, statusPanelPlaceholder } from '../data/uiContent'
+import { gameContent } from '../data/uiContent'
 
 type GamePageProps = {
   node: StoryNode
   chapter: StoryChapterMeta
   /** 用于条件过滤的状态；显示选项专属回应时是选择前的快照，避免正文中途变化。 */
   state: StoryState
+  /**
+   * 面板使用的最新变量值。
+   *
+   * 不能用 `state.stats`：显示选项专属回应时 `state` 是选择前的快照，
+   * 而状态面板必须在点击选择后立即反映新值。
+   */
+  currentStats: Stats
   /** 非 null 表示正在显示选项专属回应，此时隐藏选项、只显示继续。 */
   responseBlocks: StoryBlock[] | null
   onChoose: (choice: StoryChoice) => void
@@ -37,6 +46,7 @@ export default function GamePage({
   node,
   chapter,
   state,
+  currentStats,
   responseBlocks,
   onChoose,
   onContinue,
@@ -114,17 +124,7 @@ export default function GamePage({
         </section>
 
         {node.ui?.hideStatusPanel !== true && (
-          <aside className="panel status" aria-label="AI 状态面板">
-            <h2 className="status__title">{statusPanelPlaceholder.title}</h2>
-            <dl className="status__list">
-              {statusPanelPlaceholder.items.map((item) => (
-                <div key={item.label} className="status__item">
-                  <dt>{item.label}</dt>
-                  <dd>{item.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </aside>
+          <AiStatusPanel stats={currentStats} mode={node.ui?.mode} />
         )}
       </div>
     </main>

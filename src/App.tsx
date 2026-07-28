@@ -175,6 +175,8 @@ export default function App() {
         node={node}
         chapter={chapter}
         state={viewState}
+        // 状态面板始终读最新变量，即使正文停留在回应前的快照上。
+        currentStats={state.stats}
         responseBlocks={responseStage?.blocks ?? null}
         onChoose={handleChoose}
         onContinue={handleContinue}
