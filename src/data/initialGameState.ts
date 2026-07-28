@@ -1,7 +1,10 @@
 import type { StatKey, Stats } from '../types/game'
 
-/** 游戏总是从序章开始。 */
-export const INITIAL_CHAPTER_ID = 'prologue'
+/**
+ * 四变量的初始值与遍历顺序。
+ *
+ * 起始节点不在这里，由 src/data/story/manifest.ts 的 startNodeId 决定。
+ */
 
 /** 遍历变量时使用，保证顺序稳定。 */
 export const STAT_KEYS: readonly StatKey[] = ['gentleness', 'honesty', 'control', 'selfAcceptance']
