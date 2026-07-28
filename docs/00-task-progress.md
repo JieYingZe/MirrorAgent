@@ -10,25 +10,75 @@
 | 前期文档 | D02 | 游戏设计文档 | `docs/02-game-design.md` | P0 | 已完成 | 核心玩法、变量、章节、结局清楚 | 本文档包已生成 |
 | 前期文档 | D03 | 交互设计文档 | `docs/03-interaction-design.md` | P0 | 已完成 | 页面流程、交互状态、存档、移动端规则清楚 | 本文档包已生成 |
 | 前期文档 | D04 | UI 与视觉效果文档 | `docs/04-ui-visual-spec.md` | P0 | 已完成 | 视觉方向、字体、图标库、页面效果、素材需求清楚 | 本文档包已生成 |
-| 前期准备 | P01 | 生成页面 UI 效果图 | `/design/ui/*.png` 或 `/docs/ui-mockups.md` | P1 | 已完成 | 开始页、游戏页、结局页至少各 1 张 | 已用chatGPT生成 |
-| 前期准备 | P02 | 生成背景图与插画 | `src/assets/backgrounds/*` | P1 | 已完成 | 至少 6 张统一风格背景图 | 已用chatGPT生成 |
+| 前期准备 | P01 | 生成页面 UI 效果图 | `design/ui-mockups/*.webp` | P1 | 已完成 | 开始页、游戏页、结局页至少各 1 张 | 已用chatGPT生成；桌面／移动共 8 张，清单见 `docs/05-assets-map.md` §2。只作设计参考，不参与运行时打包 |
+| 前期准备 | P02 | 生成背景图与插画 | `src/assets/backgrounds/*` | P1 | 已完成 | 至少 6 张统一风格背景图 | 已用chatGPT生成；桌面与移动各 6 张 WebP，映射见 `docs/05-assets-map.md` §3。素材已就位，运行时接入属于 V02 |
+| 前期准备 | P03 | 音频素材与授权记录 | `public/audio/bgm/*`、`public/audio/sfx/*`、`credits/audio-credits.md` | P1 | 已完成 | BGM 与 SFX 文件存在；文件名与 `docs/05-assets-map.md` §6–§7 映射一致；每个文件的来源、作者、下载链接与授权记录完整 | 4 个 BGM + 5 个 SFX 已下载并按目标文件名放置；`credits/audio-credits.md` 记录了原始文件名、作者、Pixabay 来源、下载链接与用途。仅指素材与授权，运行时接入属于 A01–A03 |
 | 工程基础 | E01 | 初始化项目 | Vite + React + TypeScript 项目 | P0 | 已完成 | `npm install`、`npm run dev`、`npm run build` 成功 | Vite + React + TypeScript 已初始化，`npm run build` 已通过；未接真实 AI API，GitHub Pages base 路径留到部署阶段 |
-| 工程基础 | E02 | 建立基础页面 | Start/Game/Ending 三个页面 | P0 | 已完成 | 能从开始页进入游戏页，再进入结局页 | 三页基础流转已打通，占位内容放在 `src/data/demoFlow.ts`；正式章节、变量、结局与存档等游戏系统将在后续阶段实现 |
-| 数据系统 | G01 | 剧情数据结构 | `src/data/story.json`、类型定义 | P0 | 已完成 | 章节、文本、选项、变量影响可从数据驱动 | 已在 `src/types/game.ts` 建立剧情与选项类型；已建立本地 `story.json` 数据；章节、段落、选项和变量影响完全由数据驱动，组件不再持有剧情文案；当前为开发阶段示例内容（序章 + 2 章），正式剧情留待 C01 |
-| 数据系统 | G02 | 状态与变量系统 | `Stats`、选择记录、当前章节 | P0 | 已完成 | 点击选择后变量正确变化 | 已建立四变量初始状态（全部为 0）；已通过 `src/utils/gameState.ts` 实现不可变累计更新；已记录选择路径、当前章节与 `finalChoice`；当前状态仅存于内存，localStorage 留待 I03；两条验证路径变量结果均与数据一致 |
+| 工程基础 | E02 | 建立基础页面 | `src/pages/` 下 Start/Game/Ending 三个页面 | P0 | 已完成 | 能从开始页进入游戏页，再进入结局页 | 三页基础流转已打通。当时的占位内容 `src/data/demoFlow.ts` 已在 G03 中删除，现由 `src/data/story/` 的正式节点数据驱动；另有 `DataErrorPage` 作为数据损坏出口 |
+| 数据系统 | G01 | 剧情数据结构（初版） | 章节／选项类型 + 本地剧情数据 | P0 | 已完成 | 章节、文本、选项、变量影响可从数据驱动 | 初版使用 `src/data/story.json` + `src/types/game.ts` 中的章节类型，已由 G03 的节点式结构整体替换：`story.json` 与相关类型、工具已删除，`src/types/game.ts` 现在只保留 `StatKey` / `Stats` / `FinalChoice` |
+| 数据系统 | G02 | 状态与变量系统 | `Stats`、选择记录、当前节点 | P0 | 已完成 | 点击选择后变量正确变化 | 已建立四变量初始状态（全部为 0）与不可变累计更新；初版的 `src/utils/gameState.ts` 已由 `src/utils/story/storyState.ts`、`applyChoice.ts` 替换，进度字段从 `currentChapterId` 升级为 `currentNodeId`；当前状态仅存于内存，localStorage 留待 I03 |
 | 数据系统 | G03 | 新剧情引擎骨架 | `src/types/story.ts`、`src/data/story/`、`src/utils/story/`、`src/components/story/` | P0 | 已完成 | 节点式数据、条件、分支、渲染与结局规则接口可运行 | 详见下方“G03 说明” |
-| 内容实现 | C01 | 写入正式剧情 | 序章 + 五章剧情 | P0 | 已完成 | 每章 3–6 段文本、3–4 个选项 | `story-source/01`–`07` 已全部转换为运行时数据：65 个节点、20 个选择节点、80 个选项，序章→第五章全线可达并可通关。详见下方“C01 / C02 / R01 集成检查” |
+| 内容实现 | C01 | 写入正式剧情 | 序章 + 五章剧情 | P0 | 已完成 | 序章与五章全部节点化：每个剧情节点 3–6 段文本，每个选择节点 3–4 个选项，一章包含多个选择节点 | `story-source/01`–`07` 已全部转换为运行时数据：65 个节点、20 个选择节点、80 个选项，序章→第五章全线可达并可通关。详见下方“C01 / C02 / R01 集成检查” |
 | 内容实现 | C02 | 结局文案 | 5 个结局 | P0 | 已完成 | 每个结局都有标题、正文、AI 镜像报告 | 五个结局的正文、镜像报告与结尾句已录入；路径回声改为五个结局共用的 `endings/pathEchoes.ts`（22 条，按章分组）。浏览器实测五个结局均可正常进入并渲染 |
 | 规则实现 | R01 | 结局判断逻辑 | `src/utils/story/getEnding.ts`、`src/data/story/rules/endingRules.ts` | P0 | 已完成 | 不同路径能触发不同结局 | 已按 `story-source/08-ending-rules.md` 实现：mirror_trap 最高优先级、强授权去重计数、`ask_identity` 四种去向、缺失 finalChoice 的安全兜底；兜底不会返回 mirror_trap 或 active_disconnection。已接入正式剧情并通过单元测试（`npm test`）与 20000 条抽样路径模拟 |
 | 交互体验 | I01 | 打字机效果 | `TypewriterText` | P1 | 未开始 | 文本逐字显示，可点击跳过当前段 | 不影响阅读 |
 | 交互体验 | I02 | AI 状态面板 | `AiStatusPanel` | P1 | 未开始 | 不直接显示数字，而显示状态描述 | 营造系统感 |
-| 交互体验 | I03 | 本地存档 | localStorage | P1 | 未开始 | 刷新后可继续，结局后可重开 | 存档不应破坏通关 |
-| 视觉实现 | V01 | 全局视觉风格 | `global.css` | P1 | 未开始 | 暗色、安静、AI 终端感、可读性好 | 不要赛博朋克霓虹过量 |
+| 交互体验 | I03 | 本地存档 | localStorage | P1 | 未开始 | 刷新后可继续，结局后可重开 | 存档不应破坏通关；音频偏好单独保存，见 A01 |
+| 音频体验 | A01 | 启动遮罩与音频管理 | `StartupGate` 覆盖层、全局音频管理 | P1 | 未开始 | 详见下方“A01 验收标准” | 依赖 P03；流程以 `docs/03-interaction-design.md` §2 为准 |
+| 音频体验 | A02 | BGM 场景映射与切换 | BGM 场景映射与切换逻辑 | P1 | 未开始 | 详见下方“A02 验收标准” | 依赖 A01；映射与切换边界见 `docs/05-assets-map.md` §6 |
+| 音频体验 | A03 | SFX 接入与音量平衡 | 音效触发与音量策略 | P2 | 未开始 | 详见下方“A03 验收标准” | 依赖 A01；时间不足时可延后，不阻塞通关 |
+| 视觉实现 | V01 | 全局视觉风格 | `src/styles/global.css` | P1 | 进行中 | 暗色、安静、AI 终端感、可读性好 | 已有基础暗色样式、面板与块级排版；色彩变量、动效规范与结局页仪式感仍需按 `docs/04-ui-visual-spec.md` 打磨。不要赛博朋克霓虹过量 |
 | 视觉实现 | V02 | 页面背景与插画接入 | 背景图、渐变、遮罩 | P1 | 未开始 | 每章有氛围区分且风格统一 | 背景不抢文本 |
 | 传播功能 | S01 | 复制镜像报告 | 结局页按钮 | P2 | 未开始 | 可复制结局标题、报告、变量描述 | 不支持 Clipboard 时要降级 |
 | 部署发布 | DEP01 | GitHub Pages 配置 | `vite.config.ts`、README | P0 | 未开始 | `npm run build` 通过并可部署 | 注意 base 路径 |
 | 测试打磨 | T01 | 移动端适配 | CSS 响应式 | P1 | 未开始 | 320px 宽度可玩，按钮易点 | 重点测手机浏览器 |
 | 测试打磨 | T02 | 试玩反馈 | 反馈记录 | P2 | 未开始 | 至少 3 位朋友试玩，记录卡点和被打动的句子 | 问“哪一句最打到你” |
+
+---
+
+## 验证命令
+
+每次改动后至少运行前两条；改动剧情数据或结局规则时四条全跑。
+
+| 命令 | 用途 |
+|---|---|
+| `npx tsc -b` | 类型检查 |
+| `npm run build` | 构建（内部同样执行 `tsc -b`） |
+| `npm test` | vitest 单元测试（`tests/`） |
+| `npm run validate:story` | 剧情图结构与结局规则验证（`scripts/validate-story.ts`） |
+
+项目当前没有配置 lint，不存在 `npm run lint`。
+
+---
+
+## 音频任务验收标准
+
+三个任务都只描述运行时行为。素材本身与授权记录属于 P03，素材已存在不等于 A01–A03 已完成。
+
+### A01 启动遮罩与音频管理
+
+- 打开网页后先显示轻量启动遮罩（StartupGate），不直接进入 StartPage；
+- 用户点击「点击进入实验」后，才尝试解锁音频并播放首页 BGM；
+- 音频解锁或播放失败时不阻塞流程，仍然进入 StartPage，且不弹出错误弹窗；
+- 提供全局静音／恢复声音控制，在 StartPage、GamePage、EndingPage 都可访问；
+- 音频偏好（静音状态、音量）与剧情存档分开保存，使用不同的存储键；
+- 重新初始化剧情时只清除剧情存档，不强制清除音频偏好。
+
+### A02 BGM 场景映射与切换
+
+- StartPage、序章、各章节和 EndingPage 都有明确的 BGM 映射，见 `docs/05-assets-map.md` §6；
+- 同一首 BGM 在普通节点跳转（同章内换节点、分支后汇合）时保持连续播放，不重新开始；
+- 切歌时旧曲淡出、新曲淡入，任何时刻不出现两首 BGM 持续重叠；
+- 第五章前半、第五章后半与结局页的切换边界使用明确的节点 ID，不使用模糊描述；
+- 页面隐藏（`visibilitychange`）、暂停或静音后再恢复时，行为稳定，不出现叠加播放或多实例。
+
+### A03 SFX 接入与音量平衡
+
+- 普通按钮、剧情选择、警告和结局揭示音效按 `docs/05-assets-map.md` §7 的映射触发；
+- 音效音量低于 BGM 与阅读体验的容忍线，不盖过正文阅读；
+- 连续快速点击不产生严重叠音（同一音效需要节流或复用实例）；
+- 静音时 BGM 与 SFX 同时停止，没有任何遗漏通道；
+- 打字机音效不能为每个字符完整播放一次，需要按间隔或按段落节流。
 
 ---
 
@@ -49,7 +99,8 @@
 
 ### 尚未完成
 
-- 引擎骨架本身已完成，剩余工作见 I01–I03、V01–V02、S01、DEP01、T01–T02。
+- 引擎骨架本身已完成，剩余工作见 I01–I03、A01–A03、V01–V02、S01、DEP01、T01–T02。
+- `manifest.ts` 的 `backgroundKey` / `musicKey` 目前只是章节级资源键，没有任何运行时消费方；接入分别属于 V02 与 A02。
 
 ---
 

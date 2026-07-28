@@ -4,6 +4,8 @@
 游戏类型：AI 心理寓言 / 互动叙事 / 轻量变量分支  
 目标体验时长：10–15 分钟
 
+更新：2026-07-28 完成一次文档一致性整理，与仓库实际结构对齐。
+
 ---
 
 ## 1. 核心概念
@@ -88,6 +90,10 @@ const initialStats = {
 ---
 
 ## 5. 章节设计
+
+本节保留每章的主题、冲突和台词方向。正式剧情正文以 `story-source/01`–`07` 为准，运行时数据在 `src/data/story/chapters/`。
+
+下面各章的“选项设计”表是早期草稿：正式剧情把每章拆成了多个选择节点，选项文案、数量与变量数值都以 `story-source/` 与运行时数据为准，本节不再同步维护。
 
 ### 5.1 序章：创建你的代理
 
@@ -395,18 +401,20 @@ AI 把玩家变得高效、清醒、强大，但玩家失去了柔软和真实�
 
 ---
 
-## 7. 结局判断建议
+## 7. 结局判断
 
-第一版可使用规则判断，不需要复杂算法。
+结局判断使用按优先级排列的声明式规则，不需要复杂算法。
 
-优先级建议：
+正式的触发条件、阈值与优先级顺序以 `story-source/08-ending-rules.md` 为唯一权威来源：
 
-1. 如果最终选择 `ask_identity` 且 `control >= 7` 且 `selfAcceptance <= 4` → `mirror_trap`
-2. 如果最终选择 `close_agent` 且 `selfAcceptance >= 7` 且 `control <= 4` → `active_disconnection`
-3. 如果 `selfAcceptance >= 7` 且 `control <= 6` → `symbiosis`
-4. 如果 `honesty >= 7` 且 `control >= 7` 且 `gentleness <= 5` → `cruel_optimization`
-5. 如果 `gentleness >= 7` 且 `honesty <= 5` → `soft_illusion`
-6. 默认 → 根据最高变量返回最接近结局，优先 `symbiosis`
+- 数据格式与判断顺序说明：`docs/06-story-ending-data-format.md` §13–§14；
+- 实现：`src/data/story/rules/endingRules.ts`；
+- 运行时：`src/utils/story/getEnding.ts`；
+- 验证：`npm run validate:story` 与 `npm test`。
+
+本文档只保留结局的设计意图（§6），不再重复具体阈值，以免出现第二套互相矛盾的规则。
+
+> 本节早期版本曾给出一组草稿阈值（例如 `control >= 7` 触发 `mirror_trap`）。这些数值在正式剧情落地时已被替换，不要再作为参考。
 
 ---
 
@@ -448,6 +456,5 @@ MVP 完成后可考虑：
 - 更多章节：工作、亲密关系、家庭、创造、死亡、记忆；
 - 更多 AI 人格：温柔型、教练型、分析型、代理型；
 - 真正调用 LLM 生成个性化镜像报告；
-- 加入音效和环境音乐；
 - 加入多语言版本；
 - 加入“朋友试玩反馈模式”。

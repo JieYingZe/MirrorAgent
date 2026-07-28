@@ -4,6 +4,8 @@
 建议文件名：`docs/06-story-ending-data-format.md`  
 用途：定义正式剧情、局部分支、文本渲染、结局内容与结局判断的数据组织方式。本文档只描述格式和运行规则，不包含正式剧情全文。
 
+更新：2026-07-28 完成一次文档一致性整理，与仓库实际结构对齐。
+
 ---
 
 ## 1. 设计目标
@@ -90,44 +92,54 @@ src/
         activeDisconnection.ts
         mirrorTrap.ts
         pathEchoes.ts
+        manifest.ts
         index.ts
 
       rules/
         endingRules.ts
         endingRates.ts
+        index.ts
 
   types/
+    game.ts
     story.ts
 
   utils/
     story/
       applyChoice.ts
+      chapterLabels.ts
       evaluateCondition.ts
       getEnding.ts
       getStoryNode.ts
+      getVisibleBlocks.ts
+      nodeIssue.ts
       resolveRoute.ts
+      selectEndingPathEchoes.ts
+      storyState.ts
       validateStory.ts
+      index.ts
 
   components/
     story/
       StoryBlockRenderer.tsx
-      NarrationBlock.tsx
-      DialogueBlock.tsx
-      RecordBlock.tsx
-      MessageBlock.tsx
-      DocumentBlock.tsx
+      TextBlocks.tsx
+      PanelBlocks.tsx
       ChoiceList.tsx
 ```
 
 职责划分：
 
 - `chapters/`：正式章节内容和局部分支；
-- `endings/`：五个结局正文、镜像报告和路径回声；
-- `rules/endingRules.ts`：结局触发条件，不保存结局正文；
+- `endings/`：五个结局正文、镜像报告和跨结局共用的路径回声；
+- `endings/manifest.ts`：结局标题与 hidden 标记的清单，与结局定义之间有一致性校验；
+- `rules/endingRules.ts`：结局触发条件与安全兜底，不保存结局正文；
 - `rules/endingRates.ts`：理论路径占比或未来真实达成率；
 - `manifest.ts`：章节顺序、入口节点和视觉资源键；
-- `types/story.ts`：全部数据类型；
+- `types/game.ts`：`StatKey` / `Stats` / `FinalChoice` 这类跨模块基础定义；
+- `types/story.ts`：节点、文本块、条件与结局的全部数据类型；
 - `utils/story/`：统一运行逻辑，不含具体剧情文案。
+
+文本块组件按渲染方式分组，而不是每种块一个文件：`TextBlocks.tsx` 负责 narration / dialogue / quote / divider，`PanelBlocks.tsx` 负责 system / record / message / document。
 
 ---
 
@@ -1251,6 +1263,8 @@ switch (block.kind) {
 }
 ```
 
+实现上按渲染方式分组到 `TextBlocks.tsx` 与 `PanelBlocks.tsx`，分发逻辑不变。
+
 组件不能根据具体节点 ID 写特殊剧情逻辑。
 
 ### 16.3 玩家选择事务
@@ -1279,6 +1293,8 @@ switch (block.kind) {
 - `progress` 可显示为 `03 / 05`，但不强制；
 - 分支节点沿用同一章节背景和音乐；
 - 第四章可通过节点 `ui.mode: 'control'` 临时切换警告视觉。
+
+`manifest.ts` 的 `musicKey` 是章节级的，而第五章需要在章节内部换歌。BGM 的实际切换边界以 `docs/05-assets-map.md` §6 为准；该节同时记录了两种可选实现方式，实现前不要直接依赖 `musicKey`。
 
 ---
 
@@ -1348,7 +1364,7 @@ ch5_close_agent
 
 ## 19. 验证脚本要求
 
-建议增加 `scripts/validate-story.ts` 或等价构建前验证。
+验证脚本为 `scripts/validate-story.ts`，通过 `npm run validate:story` 运行，以下检查项均已实现。
 
 必须检查：
 
@@ -1386,6 +1402,8 @@ ch5_close_agent
 ---
 
 ## 20. 章节转换工作流建议
+
+本节的五个阶段已全部执行完毕：序章与五章、五个结局、路径回声、结局规则与理论占比都已转换并通过验证（见 `docs/00-task-progress.md` 的 C01 / C02 / R01）。以下内容保留，供以后新增章节或结局时复用。
 
 不建议一次性把全部正式剧情转换成所有数据文件。最佳方案是“先做样板，再分章转换，最后统一验证”。
 
