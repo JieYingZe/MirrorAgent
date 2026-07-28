@@ -10,6 +10,10 @@ export const startContent = {
   subtitle: '你创造了一个 AI。后来，它开始创造你。',
   description: ['这是一次约 10–15 分钟的 AI 心理寓言。', '建议在安静的环境里阅读。'],
   primaryAction: '开始初始化',
+  /** 存在未完成存档时替换主按钮。 */
+  continueAction: '继续实验',
+  /** 存在未完成存档时的次按钮，与结局页共用同一个重新初始化流程。 */
+  restartAction: '重新初始化',
 }
 
 /** 剧情页的通用按钮文案，不属于任何具体节点。 */

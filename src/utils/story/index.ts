@@ -15,5 +15,13 @@ export { applyChoice, advanceToNext } from './applyChoice'
 export type { ApplyChoiceResult } from './applyChoice'
 export { getEnding, getEndingDefinition, buildEndingView } from './getEnding'
 export type { EndingResolution, EndingView } from './getEnding'
+export {
+  STORY_SAVE_KEY,
+  loadStorySave,
+  saveStorySave,
+  clearStorySave,
+  validateStorySave,
+} from './storySave'
+export type { StorySaveLoadResult, StorySaveValidation } from './storySave'
 export { getChapterPhaseLabel, getChapterProgressLabel } from './chapterLabels'
 export { describeNodeIssue } from './nodeIssue'

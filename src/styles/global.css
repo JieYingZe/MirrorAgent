@@ -158,6 +158,18 @@ ul {
   letter-spacing: 0.04em;
 }
 
+/* 次要动作：与主按钮同尺寸，但不争夺视觉重心。 */
+.button--ghost {
+  justify-content: center;
+  letter-spacing: 0.04em;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.button--ghost:hover {
+  color: var(--color-text);
+}
+
 .button--choice {
   width: 100%;
   align-items: flex-start;
@@ -222,9 +234,16 @@ ul {
   color: var(--color-text-muted);
 }
 
+/* 有未完成存档时这里是「继续实验」+「重新初始化」两个按钮。 */
+.start__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+
 .start__inner .button {
   align-self: flex-start;
-  margin-top: 12px;
   min-width: 200px;
 }
 

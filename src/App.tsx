@@ -8,17 +8,20 @@ import type { EndingResolution } from './utils/story'
 import {
   advanceToNext,
   applyChoice,
+  clearStorySave,
   createInitialStoryState,
   describeNodeIssue,
   getChapterMeta,
   getEnding,
   getEndingDefinition,
   getStoryNode,
+  loadStorySave,
+  saveStorySave,
 } from './utils/story'
 
 type Screen = 'start' | 'game' | 'ending'
 
-/** 选项专属回应属于临时 UI 阶段，不写入 StoryState，也不进入以后的存档。 */
+/** 选项专属回应属于临时 UI 阶段，不写入 StoryState，也不进入存档。 */
 type ResponseStage = {
   nodeId: string
   blocks: StoryBlock[]
@@ -31,11 +34,63 @@ type EndingStage = {
   definition: EndingDefinition
 }
 
+type BootSession = {
+  screen: Screen
+  state: StoryState
+  ending: EndingStage | null
+  /** 有效的未完成存档，等玩家点击“继续实验”后才恢复。 */
+  resumable: StoryState | null
+}
+
+/**
+ * 启动时读取一次存档。
+ *
+ * - 无存档 / 损坏 / 旧版本 / storage 不可用：全部按无存档处理，停在 StartPage；
+ * - 未完成存档：先留在 StartPage，由玩家决定继续还是重新初始化；
+ * - 完成存档：用正式状态重新推导结局，直接恢复 EndingPage，不回到第五章旧节点。
+ */
+function createBootSession(): BootSession {
+  const fresh: BootSession = {
+    screen: 'start',
+    state: createInitialStoryState(),
+    ending: null,
+    resumable: null,
+  }
+
+  const result = loadStorySave()
+
+  if (result.status !== 'valid') return fresh
+
+  const saved = result.state
+
+  if (!saved.completed) {
+    return { ...fresh, resumable: saved }
+  }
+
+  const resolution = getEnding(saved)
+  const definition = getEndingDefinition(resolution.endingId)
+
+  // 校验时已确认完成存档能推导出结局，这里只是不信任地再确认一次。
+  if (!definition) {
+    clearStorySave()
+    return fresh
+  }
+
+  return {
+    screen: 'ending',
+    state: saved,
+    ending: { resolution, definition },
+    resumable: null,
+  }
+}
+
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('start')
-  const [state, setState] = useState<StoryState>(createInitialStoryState)
+  const [boot] = useState(createBootSession)
+  const [screen, setScreen] = useState<Screen>(boot.screen)
+  const [state, setState] = useState<StoryState>(boot.state)
+  const [resumable, setResumable] = useState<StoryState | null>(boot.resumable)
   const [responseStage, setResponseStage] = useState<ResponseStage | null>(null)
-  const [ending, setEnding] = useState<EndingStage | null>(null)
+  const [ending, setEnding] = useState<EndingStage | null>(boot.ending)
   const [dataError, setDataError] = useState<string | null>(null)
 
   // 切换节点后把阅读区域滚回顶部。
@@ -49,20 +104,84 @@ export default function App() {
     setDataError(detail)
   }
 
-  function resetSession() {
-    setState(createInitialStoryState())
+  /**
+   * 正式状态的唯一提交口：提交内存状态并立即写入存档。
+   *
+   * 到达结局门时把“计算结局 → 标记 completed → 保存”合成同一次提交，
+   * 避免把 `completed: false` 且停在结局门的中间态写进存档。
+   * 存档写入失败不影响内存状态，游戏照常继续。
+   */
+  function commitStoryState(next: StoryState): boolean {
+    const node = getStoryNode(next.currentNodeId)
+
+    if (!node) {
+      reportDataError(`找不到当前节点：${next.currentNodeId}。`)
+      return false
+    }
+
+    if (node.role !== 'ending_gate') {
+      setState(next)
+      saveStorySave(next)
+      return true
+    }
+
+    const resolution = getEnding(next)
+    const definition = getEndingDefinition(resolution.endingId)
+
+    if (!definition) {
+      reportDataError(`找不到结局定义：${resolution.endingId}（规则 ${resolution.ruleId}）。`)
+      return false
+    }
+
+    const completed: StoryState = { ...next, completed: true }
+
+    setState(completed)
+    setEnding({ resolution, definition })
+    saveStorySave(completed)
+    return true
+  }
+
+  /** 清空一次会话的全部临时 UI 状态：回应阶段、结局结果、错误页和可恢复存档。 */
+  function clearSessionUi() {
     setResponseStage(null)
     setEnding(null)
     setDataError(null)
   }
 
-  function handleStart() {
-    resetSession()
+  /**
+   * 「开始初始化」与「重新初始化」共用的入口。
+   *
+   * 先清除旧剧情存档，再建立全新初始状态并直接进入序章；
+   * 清除或保存失败时，内存中的重新初始化仍然成功。
+   * 只处理剧情存档，不涉及音频偏好（音频偏好属于 A01，使用独立存储键）。
+   */
+  function handleStartNewRun() {
+    clearStorySave()
+
+    const fresh = createInitialStoryState()
+
+    clearSessionUi()
+    setResumable(null)
+    setState(fresh)
+    setScreen('game')
+    saveStorySave(fresh)
+  }
+
+  /** 「继续实验」：恢复已通过校验的存档，临时 UI 状态一律从零开始。 */
+  function handleResume() {
+    if (!resumable) return
+
+    clearSessionUi()
+    setState(resumable)
     setScreen('game')
   }
 
-  function handleRestart() {
-    resetSession()
+  /** 数据损坏出口：清掉可能有问题的存档，回到开始页。 */
+  function handleExitToStart() {
+    clearStorySave()
+    clearSessionUi()
+    setResumable(null)
+    setState(createInitialStoryState())
     setScreen('start')
   }
 
@@ -84,9 +203,10 @@ export default function App() {
       return
     }
 
-    setState(result.state)
+    // 正式状态先提交并保存：即使玩家还在读选项专属回应，刷新也只会前进不会回退。
+    if (!commitStoryState(result.state)) return
 
-    // 有专属回应时先停留在原节点显示回应，玩家点击继续后才进入新节点。
+    // 有专属回应时先停留在原节点显示回应，玩家点击继续后才显示新节点。
     setResponseStage(
       result.response.length > 0
         ? { nodeId: result.previousNodeId, blocks: result.response, snapshot: state }
@@ -94,22 +214,8 @@ export default function App() {
     )
   }
 
-  function handleEnterEnding(currentState: StoryState) {
-    const resolution = getEnding(currentState)
-    const definition = getEndingDefinition(resolution.endingId)
-
-    if (!definition) {
-      reportDataError(`找不到结局定义：${resolution.endingId}（规则 ${resolution.ruleId}）。`)
-      return
-    }
-
-    setState({ ...currentState, completed: true })
-    setEnding({ resolution, definition })
-    setScreen('ending')
-  }
-
   function handleContinue() {
-    // 正在显示选项专属回应：只关闭回应，状态早已在选择时提交。
+    // 正在显示选项专属回应：只关闭回应，状态早已在选择时提交并保存。
     if (responseStage) {
       setResponseStage(null)
       return
@@ -122,8 +228,11 @@ export default function App() {
       return
     }
 
+    // 结局在进入结局门时已经作为同一次事务提交，这里只负责切页。
     if (node.role === 'ending_gate') {
-      handleEnterEnding(state)
+      if (!ending && !commitStoryState(state)) return
+
+      setScreen('ending')
       return
     }
 
@@ -139,7 +248,7 @@ export default function App() {
       return
     }
 
-    setState(nextState)
+    commitStoryState(nextState)
   }
 
   function renderGame() {
@@ -149,7 +258,9 @@ export default function App() {
     const node = getStoryNode(viewNodeId)
 
     if (!node) {
-      return <DataErrorPage message={`找不到当前节点：${viewNodeId}。`} onRestart={handleRestart} />
+      return (
+        <DataErrorPage message={`找不到当前节点：${viewNodeId}。`} onRestart={handleExitToStart} />
+      )
     }
 
     const chapter = getChapterMeta(node.chapterId)
@@ -158,7 +269,7 @@ export default function App() {
       return (
         <DataErrorPage
           message={`节点 ${node.id} 的章节 ${node.chapterId} 不在 manifest 中。`}
-          onRestart={handleRestart}
+          onRestart={handleExitToStart}
         />
       )
     }
@@ -167,7 +278,7 @@ export default function App() {
 
     if (issue) {
       console.error(`[story] ${issue}`)
-      return <DataErrorPage message={issue} onRestart={handleRestart} />
+      return <DataErrorPage message={issue} onRestart={handleExitToStart} />
     }
 
     return (
@@ -186,17 +297,23 @@ export default function App() {
 
   function renderScreen() {
     if (dataError) {
-      return <DataErrorPage message={dataError} onRestart={handleRestart} />
+      return <DataErrorPage message={dataError} onRestart={handleExitToStart} />
     }
 
     if (screen === 'start') {
-      return <StartPage onStart={handleStart} />
+      return (
+        <StartPage
+          canContinue={resumable !== null}
+          onStart={handleStartNewRun}
+          onContinue={handleResume}
+        />
+      )
     }
 
     if (screen === 'ending') {
       if (!ending) {
         return (
-          <DataErrorPage message="结局数据缺失，无法生成报告。" onRestart={handleRestart} />
+          <DataErrorPage message="结局数据缺失，无法生成报告。" onRestart={handleExitToStart} />
         )
       }
 
@@ -205,7 +322,7 @@ export default function App() {
           ending={ending.definition}
           resolution={ending.resolution}
           state={state}
-          onRestart={handleRestart}
+          onRestart={handleStartNewRun}
         />
       )
     }

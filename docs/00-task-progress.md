@@ -23,7 +23,7 @@
 | 规则实现 | R01 | 结局判断逻辑 | `src/utils/story/getEnding.ts`、`src/data/story/rules/endingRules.ts` | P0 | 已完成 | 不同路径能触发不同结局 | 已按 `story-source/08-ending-rules.md` 实现：mirror_trap 最高优先级、强授权去重计数、`ask_identity` 四种去向、缺失 finalChoice 的安全兜底；兜底不会返回 mirror_trap 或 active_disconnection。已接入正式剧情并通过单元测试（`npm test`）与 20000 条抽样路径模拟 |
 | 交互体验 | I01 | 打字机效果 | `TypewriterText` | P1 | 未开始 | 文本逐字显示，可点击跳过当前段 | 不影响阅读 |
 | 交互体验 | I02 | AI 状态面板 | `AiStatusPanel` | P1 | 已完成 | 不直接显示数字，而显示状态描述 | 四变量经 `src/utils/aiStatus.ts` 的纯映射转成状态文案（语气／反馈／权限／自我边界，每个变量五档），区间与结局阈值对齐、首末档向 ±∞ 开放，NaN 与缺字段回落到初始档；面板只展示，不写回 `StoryState`。GamePage 传入最新 `stats`，因此显示选项专属回应时也会立即更新，并尊重节点的 `ui.hideStatusPanel` 与 `ui.mode: 'control'`（仅边框与提示语变化）。桌面 280px 右栏、≤900px 两列紧凑卡片，320px 无换行无横向滚动。`tests/aiStatus.test.ts` 18 个用例覆盖区间边界、初始值、剧情实际取值范围与 ±1000／±Infinity |
-| 交互体验 | I03 | 本地存档 | localStorage | P1 | 未开始 | 刷新后可继续，结局后可重开 | 存档不应破坏通关；音频偏好单独保存，见 A01 |
+| 交互体验 | I03 | 本地存档 | localStorage | P1 | 已完成 | 刷新后可继续，结局后可重开 | 存档键 `mirror-agent:story-save`，直接持久化正式 `StoryState`（见下方“I03 说明”）。`src/utils/story/storySave.ts` 提供 load / save / clear / validate，恢复前逐字段校验并复用正式剧情索引；损坏、旧版本、引用失效的存档安全清除后按无存档处理，localStorage 不可用时静默降级为不保存。存档只处理剧情状态，音频偏好仍属 A01 且必须使用独立键 |
 | 音频体验 | A01 | 启动遮罩与音频管理 | `StartupGate` 覆盖层、全局音频管理 | P1 | 未开始 | 详见下方“A01 验收标准” | 依赖 P03；流程以 `docs/03-interaction-design.md` §2 为准 |
 | 音频体验 | A02 | BGM 场景映射与切换 | BGM 场景映射与切换逻辑 | P1 | 未开始 | 详见下方“A02 验收标准” | 依赖 A01；映射与切换边界见 `docs/05-assets-map.md` §6 |
 | 音频体验 | A03 | SFX 接入与音量平衡 | 音效触发与音量策略 | P2 | 未开始 | 详见下方“A03 验收标准” | 依赖 A01；时间不足时可延后，不阻塞通关 |
@@ -101,6 +101,56 @@
 
 - 引擎骨架本身已完成，剩余工作见 I01–I03、A01–A03、V01–V02、S01、DEP01、T01–T02。
 - `manifest.ts` 的 `backgroundKey` / `musicKey` 目前只是章节级资源键，没有任何运行时消费方；接入分别属于 V02 与 A02。
+
+---
+
+## I03 本地存档说明（2026-07-29）
+
+存储键：`mirror-agent:story-save`。存档内容就是正式 `StoryState`，没有第二套状态结构。
+
+### 只保存正式状态
+
+保存 `schemaVersion` / `currentNodeId` / `stats` / `choiceHistory` / `tags` / `flags` / `visitedNodeIds` / `finalChoice` / `completed`。
+不保存剧情正文、节点或结局对象、当前可见块、页面 screen、`responseStage`、临时快照、`currentStats` 展示副本、按钮锁与滚动状态、音频偏好，以及任何能由正式数据重新推导的内容（结局 ID 与结局正文都在刷新后用 `getEnding` 重新推导）。
+
+版本以 `storyManifest.schemaVersion` 为唯一来源，当前阶段不迁移旧版本；带 `version` / `currentChapterId` / `choices` 的旧存档一律判为不兼容。
+
+### 保存时机
+
+开始新游戏、普通节点“继续”、选择解析出下一节点、到达结局门完成结局、重新初始化写入新初始状态。
+`App.commitStoryState` 是正式状态的唯一提交口，提交内存状态与写入存档在同一处完成。
+
+### responseStage 与结局事务
+
+- 选择提交后立刻保存正式状态，此时 `currentNodeId` 已经是下一个稳定节点，`responseStage` 只用于当前会话展示；
+- 在回应显示期间刷新，会直接恢复到选择后的稳定节点：跳过没看完的临时回应，不回到选择前节点，不重复应用变量、`choiceHistory`、tags 或 flags；
+- 玩家正常读完回应点“继续”时只清除 `responseStage`，不重新应用选择；
+- 最终选择落到 `ch5.ending_gate` 时，“计算结局 → 标记 `completed: true` → 保存”是同一次提交，存档里不会出现 `completed: false` 且停在结局门的中间态。
+
+### 恢复与降级
+
+| 情况 | 行为 |
+|---|---|
+| 无有效存档 | StartPage 只显示“开始初始化” |
+| 有效未完成存档 | StartPage 显示“继续实验”和“重新初始化” |
+| 有效完成存档 | 直接恢复 EndingPage，重新推导同一结局与路径回声，不显示继续入口 |
+| 损坏 / 旧版本 / 引用失效 | 尝试清除后按无存档处理，删除失败也不会被恢复 |
+| localStorage 不可用 | 按无存档处理，全程可正常游玩，只是不保存 |
+
+校验会检查根值类型、`schemaVersion`、`currentNodeId` 存在性、四个 stats 为有限数字、`choiceHistory` 引用的节点／章节／选项及类型仍然一致、tags 与 flags 值类型、`visitedNodeIds` 存在性、`finalChoice` 合法性、`completed` 类型，并维护完成状态不变量（未完成存档不得停在结局门；完成存档必须停在结局门、写入 `finalChoice`、能重新推导出有效结局）。校验通过后返回重新组装的干净状态，存档里的多余字段不会进入内存。
+
+`getItem` / `setItem` / `removeItem` / `JSON.parse` 与读取 `localStorage` 属性本身都各自容错，任何失败都不会抛到 React 渲染层，也不会显示阻断式错误页。
+
+### 验证结果
+
+| 命令 | 结果 |
+|---|---|
+| `npx tsc -b` | 通过 |
+| `npm test`（vitest，49 个用例，其中 `tests/storySave.test.ts` 20 个） | 通过 |
+| `npm run validate:story` | 通过，0 error / 0 warning |
+| `npm run build` | 通过 |
+
+浏览器实测：无存档只显示开始初始化；普通恢复后节点、变量、状态面板与历史一致；回应显示期间刷新恢复到下一稳定节点且变量与历史只变化一次；完成后刷新恢复同一结局报告；StartPage 与 EndingPage 的重新初始化都直接进入序章并重置全部状态；四种损坏存档均安全回到开始页且键被清除；`getItem` / `setItem` / `removeItem` 全部抛错时仍可从序章玩到结局并重新开始。320px 下两个按钮全宽堆叠、无横向滚动。
 
 ---
 
