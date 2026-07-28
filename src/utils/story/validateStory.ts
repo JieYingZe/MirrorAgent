@@ -18,6 +18,7 @@ import {
   STRONG_DELEGATION_CHOICE_IDS,
   chapterMetaList,
   endingFallbackRules,
+  endingManifest,
   endingRates,
   endingRules,
   endings,
@@ -61,8 +62,26 @@ const HIDDEN_OR_EXPLICIT_ENDING_IDS: readonly EndingId[] = ['mirror_trap', 'acti
 
 const FIXED_TIMESTAMP = new Date('2026-07-28T00:00:00.000Z')
 
-const MAX_SIMULATED_PATHS = 500_000
+/**
+ * 正式剧情共有 20 个选择节点，穷举组合约为 4^20，不可能跑完。
+ * 因此改为确定性抽样：固定随机种子 + 优先选择尚未覆盖的选项，
+ * 保证每次运行结果完全一致，并且覆盖全部选项与全部结局。
+ */
+const SAMPLE_PATH_COUNT = 20_000
+const SIMULATION_SEED = 20260728
 const MAX_PATH_DEPTH = 200
+
+/** 小型确定性 PRNG（mulberry32），避免引入依赖，也避免用 Math.random 导致结果漂移。 */
+function createRandom(seed: number): () => number {
+  let a = seed >>> 0
+
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
 
 // ---------------------------------------------------------------------------
 // 小工具
@@ -344,15 +363,26 @@ function checkChoiceEffects(errors: string[], node: StoryNode, choice: StoryChoi
     errors.push(`${where}：exploration 选择不允许修改四变量。`)
   }
 
+  // roleplay 只做倾向微调，规则见 docs/06-story-ending-data-format.md §8.1。
   if (choice.type === 'roleplay') {
     if (statEntries.length > 2) {
-      errors.push(`${where}：roleplay 选择最多影响两个变量。`)
+      errors.push(`${where}：roleplay 选择最多影响两个变量，当前为 ${statEntries.length} 个。`)
     }
 
+    let totalAbsoluteChange = 0
+
     for (const [key, delta] of statEntries) {
-      if (delta !== 1) {
-        errors.push(`${where}：roleplay 选择的 ${key} 变化必须是 +1，当前为 ${delta}。`)
+      if (delta !== 1 && delta !== -1) {
+        errors.push(`${where}：roleplay 选择的 ${key} 变化只能是 +1 或 -1，当前为 ${delta}。`)
       }
+
+      totalAbsoluteChange += Math.abs(delta)
+    }
+
+    if (totalAbsoluteChange > 2) {
+      errors.push(
+        `${where}：roleplay 选择的总绝对变化量不得超过 2，当前为 ${totalAbsoluteChange}。`,
+      )
     }
   }
 }
@@ -619,6 +649,37 @@ function checkEndingData(
 
     if (ending.body.length === 0) {
       warnings.push(`结局 ${ending.id} 没有任何正文块（正式文案属于 C02）。`)
+    }
+  }
+
+  // endingManifest 重复保存了标题与 hidden，必须和结局定义保持一致，否则会悄悄漂移。
+  const manifestIds = new Set<EndingId>(endingManifest.order)
+
+  for (const endingId of Object.keys(endings) as EndingId[]) {
+    if (!manifestIds.has(endingId)) {
+      errors.push(`endingManifest.order 缺少结局 ${endingId}。`)
+    }
+  }
+
+  for (const endingId of endingManifest.order) {
+    const ending = endings[endingId]
+    const entry = endingManifest.entries[endingId]
+
+    if (ending === undefined) {
+      errors.push(`endingManifest 中的结局 ${endingId} 没有对应的结局定义。`)
+      continue
+    }
+
+    if (entry.title !== ending.title) {
+      errors.push(
+        `endingManifest.${endingId}.title（${entry.title}）与结局定义标题（${ending.title}）不一致。`,
+      )
+    }
+
+    if (entry.hidden !== (ending.metadata?.hidden ?? false)) {
+      errors.push(
+        `endingManifest.${endingId}.hidden（${entry.hidden}）与结局定义 metadata.hidden 不一致。`,
+      )
     }
   }
 
@@ -909,90 +970,95 @@ function simulateAllPaths(errors: string[], warnings: string[], summary: string[
   const ruleCounts = new Map<string, number>()
   const finalChoiceCounts = new Map<string, number>()
   const visitedNodes = new Set<StoryNodeId>()
+  const coveredChoices = new Set<string>()
+
+  const random = createRandom(SIMULATION_SEED)
 
   let pathCount = 0
   let aborted = false
 
-  function walk(state: StoryState, pathNodes: Set<StoryNodeId>, depth: number): void {
-    if (aborted) return
+  /** 走完一条完整路径；返回 false 表示遇到致命错误，整个模拟中止。 */
+  function walkOnce(): boolean {
+    let state = createInitialStoryState()
+    const pathNodes = new Set<StoryNodeId>([state.currentNodeId])
 
-    if (depth > MAX_PATH_DEPTH) {
-      errors.push(`路径深度超过 ${MAX_PATH_DEPTH}，可能存在循环。`)
-      aborted = true
-      return
-    }
+    for (let depth = 0; depth <= MAX_PATH_DEPTH; depth += 1) {
+      const node = getStoryNode(state.currentNodeId)
 
-    const node = getStoryNode(state.currentNodeId)
-
-    if (!node) {
-      errors.push(`模拟时找不到节点：${state.currentNodeId}。`)
-      aborted = true
-      return
-    }
-
-    visitedNodes.add(node.id)
-
-    if (node.role === 'ending_gate') {
-      const result = getEnding(state)
-      pathCount += 1
-
-      endingCounts.set(result.endingId, (endingCounts.get(result.endingId) ?? 0) + 1)
-      ruleCounts.set(result.ruleId, (ruleCounts.get(result.ruleId) ?? 0) + 1)
-      finalChoiceCounts.set(
-        state.finalChoice ?? '(缺失)',
-        (finalChoiceCounts.get(state.finalChoice ?? '(缺失)') ?? 0) + 1,
-      )
-
-      if (pathCount > MAX_SIMULATED_PATHS) {
-        errors.push(`模拟路径数超过 ${MAX_SIMULATED_PATHS}，剧情图可能存在爆炸式分支。`)
-        aborted = true
+      if (!node) {
+        errors.push(`模拟时找不到节点：${state.currentNodeId}。`)
+        return false
       }
 
-      return
-    }
+      visitedNodes.add(node.id)
 
-    const choices = getVisibleChoices(node.choices, state)
+      if (node.role === 'ending_gate') {
+        const result = getEnding(state)
+        pathCount += 1
 
-    if (choices.length > 0) {
-      for (const choice of choices) {
-        const result = applyChoice(state, node, choice, FIXED_TIMESTAMP)
+        endingCounts.set(result.endingId, (endingCounts.get(result.endingId) ?? 0) + 1)
+        ruleCounts.set(result.ruleId, (ruleCounts.get(result.ruleId) ?? 0) + 1)
+        finalChoiceCounts.set(
+          state.finalChoice ?? '(缺失)',
+          (finalChoiceCounts.get(state.finalChoice ?? '(缺失)') ?? 0) + 1,
+        )
 
-        if (pathNodes.has(result.state.currentNodeId)) {
-          errors.push(`模拟时检测到循环：${node.id} → ${result.state.currentNodeId}。`)
-          aborted = true
-          return
-        }
-
-        walk(result.state, new Set([...pathNodes, result.state.currentNodeId]), depth + 1)
+        return true
       }
 
-      return
+      const choices = getVisibleChoices(node.choices, state)
+      let nextState: StoryState | undefined
+
+      if (choices.length > 0) {
+        // 先挑还没覆盖过的选项，保证有限样本也能走遍每一个选项。
+        const uncovered = choices.filter((choice) => !coveredChoices.has(choice.id))
+        const pool = uncovered.length > 0 ? uncovered : choices
+        const choice = pool[Math.floor(random() * pool.length)]
+
+        coveredChoices.add(choice.id)
+        nextState = applyChoice(state, node, choice, FIXED_TIMESTAMP).state
+      } else {
+        nextState = advanceToNext(state, node)
+      }
+
+      if (!nextState) {
+        errors.push(`模拟时遇到死路节点：${node.id}。`)
+        return false
+      }
+
+      if (pathNodes.has(nextState.currentNodeId)) {
+        errors.push(`模拟时检测到循环：${node.id} → ${nextState.currentNodeId}。`)
+        return false
+      }
+
+      pathNodes.add(nextState.currentNodeId)
+      state = nextState
     }
 
-    const nextState = advanceToNext(state, node)
-
-    if (!nextState) {
-      errors.push(`模拟时遇到死路节点：${node.id}。`)
-      aborted = true
-      return
-    }
-
-    if (pathNodes.has(nextState.currentNodeId)) {
-      errors.push(`模拟时检测到循环：${node.id} → ${nextState.currentNodeId}。`)
-      aborted = true
-      return
-    }
-
-    walk(nextState, new Set([...pathNodes, nextState.currentNodeId]), depth + 1)
+    errors.push(`路径深度超过 ${MAX_PATH_DEPTH}，可能存在循环。`)
+    return false
   }
 
-  const initial = createInitialStoryState()
-  walk(initial, new Set([initial.currentNodeId]), 0)
+  for (let run = 0; run < SAMPLE_PATH_COUNT; run += 1) {
+    if (!walkOnce()) {
+      aborted = true
+      break
+    }
+  }
 
   if (aborted) return
 
-  summary.push(`模拟路径总数：${pathCount}`)
+  summary.push(`模拟路径数（确定性抽样）：${pathCount}`)
   summary.push(`模拟覆盖节点数：${visitedNodes.size}`)
+  summary.push(`模拟覆盖选项数：${coveredChoices.size}`)
+
+  for (const node of nodeIndex.values()) {
+    for (const choice of node.choices ?? []) {
+      if (!coveredChoices.has(choice.id)) {
+        errors.push(`选择 ${choice.id}（节点 ${node.id}）在抽样模拟中从未被选中。`)
+      }
+    }
+  }
 
   for (const [endingId, count] of [...endingCounts].sort((a, b) => b[1] - a[1])) {
     summary.push(`结局 ${endingId}：${count} 条路径`)

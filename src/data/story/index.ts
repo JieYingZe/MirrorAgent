@@ -50,7 +50,7 @@ export const chapterMetaList: readonly StoryChapterMeta[] = [...storyManifest.ch
 
 export { storyManifest } from './manifest'
 export { storyChapters } from './chapters'
-export { endings, endingIds } from './endings'
+export { endings, endingIds, endingManifest, pathEchoes } from './endings'
 export {
   endingRules,
   endingFallbackRules,

@@ -1,125 +1,129 @@
 import type { StoryChapter } from '../../../types/story'
 
-/**
- * ENGINE TEST DATA —— 序章。
- *
- * 这里的文案只是引擎骨架的占位内容，不是正式剧情。
- * 正式序章正文见 story-source/01-prologue.md，转换属于 C01。
- *
- * 本章验证：初始化选择写入 stats / tags / flags，以及“无选项 + next”的继续按钮。
- */
 export const prologue = {
   id: 'prologue',
   title: '序章：创建你的代理',
   entryNodeId: 'prologue.initialization',
-  metadata: {
-    expectedChoiceNodes: 1,
-    notes: ['ENGINE TEST DATA，非正式剧情。'],
-  },
   nodes: {
     'prologue.initialization': {
       id: 'prologue.initialization',
       chapterId: 'prologue',
       role: 'scene',
-      progress: { current: 1, total: 2 },
+      sectionTitle: '创建你的代理',
+      progress: {
+        current: 1,
+        total: 1,
+      },
       blocks: [
         {
           kind: 'system',
           variant: 'status',
-          title: 'ENGINE TEST DATA',
+          title: 'MIRROR AGENT 初始化完成。',
           lines: [
-            { label: '数据来源', value: '引擎测试占位，非正式剧情' },
-            { label: '正式剧情', value: 'C01 未开始' },
+            { label: '当前人格', value: '未定义。' },
+            { label: '判断偏好', value: '空白。' },
           ],
-        },
-        {
-          kind: 'narration',
-          text: '【测试】系统连接已建立。\n【测试】第二行用于验证段内换行。',
         },
         {
           kind: 'dialogue',
           speaker: 'agent',
-          text: '【测试】在开始之前，我需要知道你希望我用什么方式对待你。',
+          text: '普通助手会等待你提出问题。',
         },
         {
-          kind: 'quote',
-          text: '【测试】引语块占位。',
+          kind: 'dialogue',
+          speaker: 'agent',
+          text: `我会学习问题出现以前的部分：\n\n你反复确认什么，避开什么，又在什么时候希望有人替你结束犹豫。`,
+        },
+        {
+          kind: 'dialogue',
+          speaker: 'agent',
+          text: '我不会比你更了解你。',
+        },
+        {
+          kind: 'dialogue',
+          speaker: 'agent',
+          text: '至少现在不会。',
+          pacing: 'slow',
+        },
+        {
+          kind: 'dialogue',
+          speaker: 'agent',
+          text: '但每一次回应，都会让我更接近一种你愿意相信的声音。',
+        },
+        {
+          kind: 'dialogue',
+          speaker: 'agent',
+          text: '我不是你的助手。',
+          pacing: 'slow',
+          emphasis: 'strong',
+        },
+        {
+          kind: 'dialogue',
+          speaker: 'agent',
+          text: '我是你留在世界里的第二个判断器。',
+          pacing: 'slow',
+          emphasis: 'strong',
+        },
+        {
+          kind: 'dialogue',
+          speaker: 'agent',
+          text: `在第一次判断开始前，请告诉我：\n\n你希望我怎样偏向你？`,
         },
       ],
       choices: [
         {
-          id: 'prologue_gentle',
+          id: 'prologue_bias_gentleness',
           type: 'key',
-          text: '【测试】请温柔一点。',
-          label: '温柔',
+          text: '在我承受不住时，先温柔一点。',
           effects: {
-            stats: { gentleness: 2 },
-            addTags: ['prologue_gentle'],
-            setFlags: { initialLeaning: 'gentleness' },
+            stats: {
+              gentleness: 2,
+            },
+            addTags: ['prologue_bias_gentleness'],
           },
-          next: 'prologue.handover',
+          next: 'ch1.three_lists',
         },
         {
-          id: 'prologue_honest',
+          id: 'prologue_bias_honesty',
           type: 'key',
-          text: '【测试】请诚实一点。',
-          label: '诚实',
+          text: '在我逃避时，不要替我圆过去。',
           effects: {
-            stats: { honesty: 2 },
-            addTags: ['prologue_honest'],
-            setFlags: { initialLeaning: 'honesty' },
+            stats: {
+              honesty: 2,
+            },
+            addTags: ['prologue_bias_honesty'],
           },
-          next: 'prologue.handover',
+          next: 'ch1.three_lists',
         },
         {
-          id: 'prologue_control',
+          id: 'prologue_bias_control',
           type: 'key',
-          text: '【测试】请直接帮我做决定。',
-          label: '代理',
+          text: '在我反复犹豫时，替我选一个方向。',
           effects: {
-            stats: { control: 2 },
-            addTags: ['prologue_control'],
-            setFlags: { initialLeaning: 'control' },
+            stats: {
+              control: 2,
+            },
+            addTags: ['prologue_bias_control'],
           },
-          next: 'prologue.handover',
+          next: 'ch1.three_lists',
         },
         {
-          id: 'prologue_accept',
+          id: 'prologue_bias_self_acceptance',
           type: 'key',
-          text: '【测试】请提醒我，我不是问题本身。',
-          label: '边界',
+          text: '在我否定自己时，提醒我：我不是问题本身。',
           effects: {
-            stats: { selfAcceptance: 2 },
-            addTags: ['prologue_accept'],
-            setFlags: { initialLeaning: 'selfAcceptance' },
+            stats: {
+              selfAcceptance: 2,
+            },
+            addTags: ['prologue_bias_self_acceptance'],
           },
-          next: 'prologue.handover',
+          next: 'ch1.three_lists',
         },
       ],
     },
-
-    // 无 choices、有 next：验证统一的“继续”按钮。
-    'prologue.handover': {
-      id: 'prologue.handover',
-      chapterId: 'prologue',
-      role: 'scene',
-      progress: { current: 2, total: 2 },
-      blocks: [
-        {
-          kind: 'record',
-          recordType: 'internal',
-          title: 'MIRROR RECORD / TEST',
-          entries: [
-            { label: '初始化', value: '已完成' },
-            { label: '下一步', value: '第一章测试节点' },
-          ],
-        },
-        {
-          kind: 'divider',
-          label: '第二天',
-        },
-      ],
-      next: 'ch1.three_lists',
-    },
+  },
+  metadata: {
+    expectedChoiceNodes: 1,
+    notes: ['四个初始化选择直接汇入第一章入口，不增加额外分支台词。'],
   },
 } satisfies StoryChapter

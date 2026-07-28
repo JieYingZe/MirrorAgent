@@ -3,12 +3,8 @@
 export { evaluateCondition } from './evaluateCondition'
 export { resolveRoute, listRouteTargets } from './resolveRoute'
 export { getStoryNode, getChapterMeta } from './getStoryNode'
-export {
-  getVisibleBlocks,
-  getVisibleChoices,
-  getVisibleGroupBlocks,
-  selectPathEchoes,
-} from './getVisibleBlocks'
+export { getVisibleBlocks, getVisibleChoices, getVisibleGroupBlocks } from './getVisibleBlocks'
+export { selectEndingPathEchoes } from './selectEndingPathEchoes'
 export {
   createInitialStoryState,
   applyStatChanges,

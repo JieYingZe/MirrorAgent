@@ -1,6 +1,5 @@
 import type {
   ConditionalBlockGroup,
-  EndingEchoRule,
   StoryBlock,
   StoryChoice,
   StoryState,
@@ -45,32 +44,4 @@ export function getVisibleGroupBlocks(
     .flatMap((group) => group.blocks)
 }
 
-/**
- * 路径回声：同一分组最多取一条，按 priority 从高到低选择。
- * 不做随机，保证相同存档得到稳定报告。
- */
-export function selectPathEchoes(
-  rules: readonly EndingEchoRule[] | undefined,
-  state: StoryState,
-  maxTotal = 4,
-): StoryBlock[] {
-  if (!rules) return []
-
-  const bestByGroup = new Map<string, EndingEchoRule>()
-
-  for (const rule of rules) {
-    if (!evaluateCondition(rule.when, state)) continue
-
-    const group = rule.group ?? rule.id
-    const current = bestByGroup.get(group)
-
-    if (current === undefined || (rule.priority ?? 0) > (current.priority ?? 0)) {
-      bestByGroup.set(group, rule)
-    }
-  }
-
-  return [...bestByGroup.values()]
-    .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
-    .slice(0, maxTotal)
-    .map((rule) => rule.block)
-}
+/* 路径回声的选择逻辑见 ./selectEndingPathEchoes.ts，不在这里重复实现。 */

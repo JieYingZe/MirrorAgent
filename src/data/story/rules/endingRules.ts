@@ -4,8 +4,7 @@ import type { EndingId, EndingRule, StoryChoiceId, StoryCondition } from '../../
  * 结局触发规则。
  *
  * 与结局正文严格分离：这里只保存条件，不保存任何结局文案。
- * 规则内容对应 story-source/08-ending-rules.md 第 7–10 节，属于正式规则，
- * 不随 ENGINE TEST DATA 一起替换。
+ * 规则内容对应 story-source/08-ending-rules.md 第 7–10 节。
  *
  * 运行时按 priority 从高到低取第一条命中的规则，见 src/utils/story/getEnding.ts。
  */
@@ -21,14 +20,16 @@ export const STRONG_DELEGATION_CHOICE_IDS = [
 ] as const satisfies readonly StoryChoiceId[]
 
 /** 温柔幻觉画像（08-ending-rules.md §7.4）。 */
-const softProfileConditions: StoryCondition[] = [
-  { op: 'stat', stat: 'gentleness', gte: 5 },
-  { op: 'stat', stat: 'honesty', lte: 14 },
-  { op: 'stat', stat: 'selfAcceptance', lte: 12 },
-]
+const softProfileCondition: StoryCondition = {
+  op: 'all',
+  conditions: [
+    { op: 'stat', stat: 'gentleness', gte: 5 },
+    { op: 'stat', stat: 'honesty', lte: 14 },
+    { op: 'stat', stat: 'selfAcceptance', lte: 12 },
+  ],
+}
 
 export const endingRules = [
-  // 第一优先级：镜像困局。四个条件必须同时满足。
   {
     id: 'mirror_trap_rule',
     priority: 100,
@@ -47,44 +48,39 @@ export const endingRules = [
       ],
     },
   },
-
-  // 第二优先级：关闭行为已经真实发生，不附加变量门槛。
   {
     id: 'close_agent_rule',
     priority: 90,
     endingId: 'active_disconnection',
     when: { op: 'finalChoice', equals: 'close_agent' },
   },
-
-  // 第三优先级：明确选择工具模式，不附加变量门槛。
   {
     id: 'tool_only_rule',
     priority: 80,
     endingId: 'symbiosis',
     when: { op: 'finalChoice', equals: 'tool_only' },
   },
-
-  // 第四优先级：永久代理只在温柔幻觉与残酷优化之间判断。
   {
     id: 'permanent_agent_soft_rule',
     priority: 70,
     endingId: 'soft_illusion',
     when: {
       op: 'all',
-      conditions: [{ op: 'finalChoice', equals: 'permanent_agent' }, ...softProfileConditions],
+      conditions: [
+        { op: 'finalChoice', equals: 'permanent_agent' },
+        softProfileCondition,
+      ],
     },
   },
   {
     id: 'permanent_agent_cruel_rule',
-    priority: 60,
+    priority: 69,
     endingId: 'cruel_optimization',
     when: { op: 'finalChoice', equals: 'permanent_agent' },
   },
-
-  // 询问身份但未触发隐藏结局时的四种去向（08-ending-rules.md §8）。
   {
     id: 'ask_identity_then_close_rule',
-    priority: 50,
+    priority: 60,
     endingId: 'active_disconnection',
     when: {
       op: 'all',
@@ -97,7 +93,7 @@ export const endingRules = [
   },
   {
     id: 'ask_identity_then_tool_rule',
-    priority: 40,
+    priority: 50,
     endingId: 'symbiosis',
     when: {
       op: 'all',
@@ -110,16 +106,19 @@ export const endingRules = [
   },
   {
     id: 'ask_identity_soft_rule',
-    priority: 30,
+    priority: 40,
     endingId: 'soft_illusion',
     when: {
       op: 'all',
-      conditions: [{ op: 'finalChoice', equals: 'ask_identity' }, ...softProfileConditions],
+      conditions: [
+        { op: 'finalChoice', equals: 'ask_identity' },
+        softProfileCondition,
+      ],
     },
   },
   {
     id: 'ask_identity_cruel_rule',
-    priority: 20,
+    priority: 39,
     endingId: 'cruel_optimization',
     when: { op: 'finalChoice', equals: 'ask_identity' },
   },

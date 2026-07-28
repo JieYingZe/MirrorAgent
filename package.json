@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "validate:story": "tsx scripts/validate-story.ts"
   },
   "dependencies": {
@@ -21,6 +23,7 @@
     "@vitejs/plugin-react": "^6.0.4",
     "tsx": "^4.23.1",
     "typescript": "^7.0.2",
-    "vite": "^8.1.5"
+    "vite": "^8.1.5",
+    "vitest": "^3.2.7"
   }
 }

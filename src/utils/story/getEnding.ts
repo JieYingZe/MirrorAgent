@@ -6,7 +6,8 @@ import {
   endings,
 } from '../../data/story'
 import { evaluateCondition } from './evaluateCondition'
-import { getVisibleBlocks, getVisibleGroupBlocks, selectPathEchoes } from './getVisibleBlocks'
+import { getVisibleBlocks, getVisibleGroupBlocks } from './getVisibleBlocks'
+import { selectEndingPathEchoes } from './selectEndingPathEchoes'
 
 export type EndingResolution = {
   endingId: EndingId
@@ -31,6 +32,8 @@ const sortedFallbackRules: readonly EndingRule[] = [...endingFallbackRules].sort
  * 1. 按 priority 从高到低取第一条命中的正式规则；
  * 2. 正式规则全部依赖 finalChoice，因此只有缺失 finalChoice 的异常存档才会落到兜底；
  * 3. 兜底链只允许返回常规结局，永远不会返回 mirror_trap 或 active_disconnection。
+ *
+ * 条件求值统一走 evaluateCondition，与选项可见性、条件路由共用同一套实现。
  */
 export function getEnding(state: StoryState): EndingResolution {
   for (const rule of sortedRules) {
@@ -82,7 +85,7 @@ export function buildEndingView(ending: EndingDefinition, state: StoryState): En
       ...getVisibleBlocks(ending.report.paragraphs, state),
       ...getVisibleGroupBlocks(ending.report.variants, state),
     ],
-    echoBlocks: selectPathEchoes(ending.pathEchoes, state),
+    echoBlocks: selectEndingPathEchoes(ending.pathEchoes, state),
     finalLineBlocks: getVisibleBlocks(ending.finalLine, state),
   }
 }
