@@ -14,7 +14,7 @@
 ```txt
 design/                 # 设计参考，不参与运行时打包
 public/audio/           # 运行时音频，使用公开路径访问
-src/assets/             # 运行时图片，由 Vite import 处理
+src/assets/             # 运行时图片（只提交 WebP），由 Vite import 处理
 ```
 
 规则：
@@ -61,11 +61,43 @@ src/assets/backgrounds/
 
 背景图用于 StartPage、GamePage、EndingPage，以及不同章节的氛围区分。
 
+### 3.0 两类背景图，用法不同
+
+| 类别 | 文件 | 性质 | 显示方式 | 页面配合方式 |
+|---|---|---|---|---|
+| 开始页成稿 | `bg-start` / `bg-start-mobile` | 画面里已经有英文标题、中文标题、副标题、右侧终端中文、渐变与光效，是成品画面 | `object-fit: contain`，完整显示不裁切 | StartPage 不渲染这些可见 DOM 文本，只放操作按钮；无全局遮罩，不压低不透明度 |
+| 剧情氛围图 | 其余六张（含 `bg-prologue`） | 无海报文字的氛围底图，正文压在上面 | `object-fit: cover`，铺满不留白 | GamePage / EndingPage 叠页面级暗色遮罩，保证正文对比度 |
+
+要点：
+
+- 开始页与序章是**两张不同的图**：`bg-start` 是成稿，`bg-prologue` 是同一个房间但没有海报文字。
+  因此「开始页 → 序章」会发生一次背景切换。
+- StartPage 是成稿展示模式：`contain` 完整显示、无全局遮罩、图片保持原始亮度，
+  四周露出与成稿边缘协调的暗色渐变，再用一圈很窄的 mask 把矩形边界化掉。
+- 只有 `start` 用 `contain`；序章与各章节用 `cover`，不会因此出现留白。
+- StartPage 保留一段视觉隐藏的标题与说明供屏幕阅读器读取；
+  成稿加载失败时它转为可见兜底，背景退回 CSS 渐变。
+- 不要为了「压掉成稿里的文字」而调低 `bg-start` 的不透明度或加满屏深色层。
+
+### 3.0.1 格式转换
+
+仓库只提交运行时用的 WebP。素材如果以 PNG 出稿，在同一目录转成 WebP，再自行删除或移出仓库：
+
+```bash
+npm run assets:convert -- src/assets/backgrounds/desktop/bg-prologue.png
+```
+
+默认输出到源文件所在目录的同名 `.webp`，quality 100，只转格式，不缩放／裁切／锐化／调色；
+也可以显式给出第二个参数指定目标路径。脚本在 `scripts/convert-backgrounds.mjs`
+（基于 `sharp`，devDependency），转换后会回读输出确认能解码、宽高与源图一致，并打印尺寸与文件大小。
+源文件不存在、源与目标同路径、参数个数不对都会报错并返回非零退出码。
+
 ### 3.1 桌面端背景图
 
 | 场景 | 文件 | 用途 |
 |---|---|---|
-| start / prologue | `src/assets/backgrounds/desktop/bg-start.webp` | 启动后首页 / 序章初始化 |
+| start | `src/assets/backgrounds/desktop/bg-start.webp` | 开始页成稿（`contain` 完整显示） |
+| prologue | `src/assets/backgrounds/desktop/bg-prologue.webp` | 序章：创建你的代理 |
 | chapter_1 | `src/assets/backgrounds/desktop/bg-efficiency.webp` | 第一章：效率焦虑 |
 | chapter_2 | `src/assets/backgrounds/desktop/bg-relationship.webp` | 第二章：关系回声 |
 | chapter_3 | `src/assets/backgrounds/desktop/bg-perfect-self.webp` | 第三章：完美版本 |
@@ -76,14 +108,25 @@ src/assets/backgrounds/
 
 | 场景 | 文件 | 用途 |
 |---|---|---|
-| start / prologue | `src/assets/backgrounds/mobile/bg-start-mobile.webp` | 启动后首页 / 序章初始化 |
+| start | `src/assets/backgrounds/mobile/bg-start-mobile.webp` | 开始页成稿（`contain` 完整显示） |
+| prologue | `src/assets/backgrounds/mobile/bg-prologue-mobile.webp` | 序章：创建你的代理 |
 | chapter_1 | `src/assets/backgrounds/mobile/bg-efficiency-mobile.webp` | 第一章：效率焦虑 |
 | chapter_2 | `src/assets/backgrounds/mobile/bg-relationship-mobile.webp` | 第二章：关系回声 |
 | chapter_3 | `src/assets/backgrounds/mobile/bg-perfect-self-mobile.webp` | 第三章：完美版本 |
 | chapter_4 | `src/assets/backgrounds/mobile/bg-control-mobile.webp` | 第四章：失控日志 |
 | chapter_5 / ending | `src/assets/backgrounds/mobile/bg-ending-mobile.webp` | 第五章：关闭确认 / 结局页 |
 
-建议在代码中集中维护背景图与章节的对应关系，避免在多个组件中分散硬编码路径。
+背景图与章节的对应关系集中维护在代码里，页面和组件都不各自 import 图片：
+
+```txt
+src/types/visual.ts                    场景键与调校参数类型
+src/utils/visualScene.ts               场景解析（纯函数，不 import 图片）
+src/data/visualScenes.ts               唯一维护背景路径、object-position、不透明度的地方
+src/components/visual/SceneBackground.tsx  渐变兜底 / 图片层 / 遮罩三层实现
+```
+
+剧情侧的唯一输入是 `src/data/story/manifest.ts` 里章节级的 `backgroundKey`，
+不存在节点级背景字段。
 
 ---
 

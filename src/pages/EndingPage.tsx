@@ -23,17 +23,22 @@ export default function EndingPage({ ending, resolution, state, onRestart }: End
   return (
     <main className="screen screen--ending fade-in">
       <div className="ending__inner">
-        <p className="eyebrow">SESSION CLOSED</p>
+        {/* 标题区居中，正文与报告保持左对齐：仪式感来自留白与层级，不靠特效（V01）。 */}
+        <header className="ending__header">
+          <p className="eyebrow">SESSION CLOSED</p>
 
-        <h1 className="ending__title">{ending.title}</h1>
+          <h1 className="ending__title">{ending.title}</h1>
 
-        {ending.subtitle && <p className="ending__description">{ending.subtitle}</p>}
+          {ending.subtitle && <p className="ending__description">{ending.subtitle}</p>}
+        </header>
 
-        <StoryBlockList
-          blocks={view.bodyBlocks}
-          idPrefix={`${ending.id}-body`}
-          className="story-blocks"
-        />
+        <section className="panel ending__body">
+          <StoryBlockList
+            blocks={view.bodyBlocks}
+            idPrefix={`${ending.id}-body`}
+            className="story-blocks"
+          />
+        </section>
 
         <section className="panel report" aria-labelledby="report-title">
           <h2 id="report-title" className="report__title">
@@ -67,7 +72,7 @@ export default function EndingPage({ ending, resolution, state, onRestart }: End
         <StoryBlockList
           blocks={view.finalLineBlocks}
           idPrefix={`${ending.id}-final`}
-          className="story-blocks"
+          className="story-blocks ending__final"
         />
 
         {/*

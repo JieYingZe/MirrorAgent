@@ -71,20 +71,32 @@ npm run validate:story
 
 `npm run validate:story` 会检查剧情图结构、结局规则与理论占比数据。项目当前没有配置 lint。
 
+## 素材转换
+
+仓库只提交运行时用的 WebP。素材如果以 PNG 出稿，在同一目录转成 WebP，再自行删除或移出仓库：
+
+```bash
+npm run assets:convert -- src/assets/backgrounds/desktop/bg-prologue.png
+```
+
+默认输出到源文件所在目录的同名 `.webp`，quality 100，只转格式不做任何视觉处理。
+
 ## 目录结构
 
 ```txt
 src/
-  assets/backgrounds/   运行时背景图（desktop / mobile）
+  assets/backgrounds/   运行时背景图 WebP（desktop / mobile）
   components/story/     文本块渲染与选项列表
+  components/visual/    场景背景层
   data/story/           manifest、chapters、endings、rules
+  data/visualScenes.ts  背景资源与场景调校
   pages/                Start / Game / Ending / DataError
   styles/global.css
-  types/                game.ts、story.ts
+  types/                game.ts、story.ts、visual.ts
   utils/story/          剧情引擎运行逻辑
 public/audio/           bgm/ 与 sfx/
 credits/                音频来源与授权记录
-scripts/                validate-story.ts
+scripts/                validate-story.ts、convert-backgrounds.mjs
 tests/                  vitest 用例
 story-source/           已确认剧情源稿
 design/ui-mockups/      UI 参考图，不参与打包

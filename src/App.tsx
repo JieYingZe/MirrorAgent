@@ -3,7 +3,15 @@ import StartPage from './pages/StartPage'
 import GamePage from './pages/GamePage'
 import EndingPage from './pages/EndingPage'
 import DataErrorPage from './pages/DataErrorPage'
-import type { EndingDefinition, StoryBlock, StoryChoice, StoryState } from './types/story'
+import type {
+  EndingDefinition,
+  StoryBlock,
+  StoryChapterMeta,
+  StoryChoice,
+  StoryNode,
+  StoryState,
+} from './types/story'
+import type { SceneImageStatus, SceneSurface } from './types/visual'
 import type { EndingResolution } from './utils/story'
 import {
   advanceToNext,
@@ -19,9 +27,23 @@ import {
   responseSequenceKey,
   saveStorySave,
 } from './utils/story'
+import { resolveSceneKey } from './utils/visualScene'
 import { useAutoplayPreference } from './hooks/useAutoplayPreference'
+import { SceneBackground } from './components/visual/SceneBackground'
 
 type Screen = 'start' | 'game' | 'ending'
+
+/**
+ * 一次渲染要显示的画面。
+ *
+ * 先解析成这个结构再渲染，是为了让「显示哪一页」和「显示哪一张背景」读同一份结果：
+ * 背景层需要知道当前节点属于哪一章，也需要知道是不是掉进了数据错误页。
+ */
+type ScreenView =
+  | { surface: 'start' }
+  | { surface: 'game'; node: StoryNode; chapter: StoryChapterMeta; viewState: StoryState }
+  | { surface: 'ending'; stage: EndingStage }
+  | { surface: 'error'; message: string }
 
 /** 选项专属回应属于临时 UI 阶段，不写入 StoryState，也不进入存档。 */
 type ResponseStage = {
@@ -99,6 +121,14 @@ export default function App() {
   const [responseStage, setResponseStage] = useState<ResponseStage | null>(null)
   const [ending, setEnding] = useState<EndingStage | null>(boot.ending)
   const [dataError, setDataError] = useState<string | null>(null)
+
+  /**
+   * 当前场景图片的加载状态（V02）。
+   *
+   * 只有开始页会用到：它的可见标题与说明都在 `bg-start` 成稿里，
+   * 成稿显示不出来时页面需要退回一套可见文字兜底。
+   */
+  const [sceneImageStatus, setSceneImageStatus] = useState<SceneImageStatus>('loading')
 
   /**
    * 自动播放偏好（I01）。
@@ -280,87 +310,114 @@ export default function App() {
     commitStoryState(nextState)
   }
 
-  function renderGame() {
+  /** 解析当前画面。所有数据错误都在这里收敛成 `surface: 'error'`。 */
+  function resolveScreenView(): ScreenView {
+    if (dataError) return { surface: 'error', message: dataError }
+
+    if (screen === 'start') return { surface: 'start' }
+
+    if (screen === 'ending') {
+      return ending
+        ? { surface: 'ending', stage: ending }
+        : { surface: 'error', message: '结局数据缺失，无法生成报告。' }
+    }
+
     // 显示回应时继续渲染上一个节点，并使用选择前的状态快照做条件过滤。
     const viewNodeId = responseStage?.nodeId ?? state.currentNodeId
     const viewState = responseStage?.snapshot ?? state
     const node = getStoryNode(viewNodeId)
 
     if (!node) {
-      return (
-        <DataErrorPage message={`找不到当前节点：${viewNodeId}。`} onRestart={handleExitToStart} />
-      )
+      return { surface: 'error', message: `找不到当前节点：${viewNodeId}。` }
     }
 
     const chapter = getChapterMeta(node.chapterId)
 
     if (!chapter) {
-      return (
-        <DataErrorPage
-          message={`节点 ${node.id} 的章节 ${node.chapterId} 不在 manifest 中。`}
-          onRestart={handleExitToStart}
-        />
-      )
+      return {
+        surface: 'error',
+        message: `节点 ${node.id} 的章节 ${node.chapterId} 不在 manifest 中。`,
+      }
     }
 
     const issue = responseStage ? undefined : describeNodeIssue(node, viewState)
 
     if (issue) {
       console.error(`[story] ${issue}`)
-      return <DataErrorPage message={issue} onRestart={handleExitToStart} />
+      return { surface: 'error', message: issue }
     }
 
-    return (
-      <GamePage
-        node={node}
-        chapter={chapter}
-        state={viewState}
-        // 状态面板始终读最新变量，即使正文停留在回应前的快照上。
-        currentStats={state.stats}
-        responseBlocks={responseStage?.blocks ?? null}
-        responseKey={responseStage?.sequenceKey ?? null}
-        autoplayEnabled={autoplayEnabled}
-        onAutoplayEnabledChange={setAutoplayEnabled}
-        onChoose={handleChoose}
-        onContinue={handleContinue}
-      />
-    )
+    return { surface: 'game', node, chapter, viewState }
   }
 
-  function renderScreen() {
-    if (dataError) {
-      return <DataErrorPage message={dataError} onRestart={handleExitToStart} />
-    }
+  function renderScreen(view: ScreenView) {
+    switch (view.surface) {
+      case 'error':
+        return <DataErrorPage message={view.message} onRestart={handleExitToStart} />
 
-    if (screen === 'start') {
-      return (
-        <StartPage
-          canContinue={resumable !== null}
-          onStart={handleStartNewRun}
-          onContinue={handleResume}
-        />
-      )
-    }
-
-    if (screen === 'ending') {
-      if (!ending) {
+      case 'start':
         return (
-          <DataErrorPage message="结局数据缺失，无法生成报告。" onRestart={handleExitToStart} />
+          <StartPage
+            canContinue={resumable !== null}
+            // 只在明确失败时退回可见文字：加载中仍然等成稿，不闪一次兜底再收回去。
+            backgroundUnavailable={sceneImageStatus === 'failed' || sceneImageStatus === 'unavailable'}
+            onStart={handleStartNewRun}
+            onContinue={handleResume}
+          />
         )
-      }
 
-      return (
-        <EndingPage
-          ending={ending.definition}
-          resolution={ending.resolution}
-          state={state}
-          onRestart={handleStartNewRun}
-        />
-      )
+      case 'ending':
+        return (
+          <EndingPage
+            ending={view.stage.definition}
+            resolution={view.stage.resolution}
+            state={state}
+            onRestart={handleStartNewRun}
+          />
+        )
+
+      case 'game':
+        return (
+          <GamePage
+            node={view.node}
+            chapter={view.chapter}
+            state={view.viewState}
+            // 状态面板始终读最新变量，即使正文停留在回应前的快照上。
+            currentStats={state.stats}
+            responseBlocks={responseStage?.blocks ?? null}
+            responseKey={responseStage?.sequenceKey ?? null}
+            autoplayEnabled={autoplayEnabled}
+            onAutoplayEnabledChange={setAutoplayEnabled}
+            onChoose={handleChoose}
+            onContinue={handleContinue}
+          />
+        )
     }
-
-    return renderGame()
   }
 
-  return <div className="app-shell">{renderScreen()}</div>
+  const view = resolveScreenView()
+  const surface: SceneSurface = view.surface
+  /*
+    背景只认场景键（V02）。
+
+    剧情侧唯一的输入是章节的 backgroundKey，所以同一章内换节点、进分支、
+    分支汇流拿到的都是同一个键，图片不会重复加载；
+    开始页与序章同为 start、第五章与结局页同为 ending，两处交界也不换图。
+    从存档恢复时这里直接读当前节点所属章节，不会先经过开始页的背景。
+  */
+  const sceneKey = resolveSceneKey(
+    surface,
+    view.surface === 'game' ? view.chapter.backgroundKey : undefined,
+  )
+
+  return (
+    <div className="app-shell">
+      <SceneBackground
+        sceneKey={sceneKey}
+        surface={surface}
+        onImageStatusChange={setSceneImageStatus}
+      />
+      {renderScreen(view)}
+    </div>
+  )
 }

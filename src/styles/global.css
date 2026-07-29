@@ -1,28 +1,76 @@
+/*
+  《镜中代理》全局样式。
+
+  组织顺序：设计变量 → 基础重置 → 场景背景层 → 布局骨架 → 通用元素 →
+  各页面 → 剧情文本块 → 状态面板 → 动效 → 响应式。
+
+  两条贯穿全篇的规则：
+  - 可读性优先。正文与主要控件都坐在实色／半透明底上，
+    backdrop-filter 只作锦上添花，去掉它对比度也不会掉。
+  - 背景不抢文本。图片层永远在遮罩之下，遮罩强度按页面区分。
+*/
+
 :root {
-  /* 颜色 */
+  /* ---------- 色彩 ---------- */
+  /* 基准对照 docs/04-ui-visual-spec.md §4.1；
+     text-muted / text-faint 比文档略提亮，用于满足小字号的 WCAG AA 对比度。 */
   --color-bg: #080b10;
   --color-bg-soft: #0d1118;
-  --color-panel: rgba(15, 20, 30, 0.72);
+  --color-bg-deep: #05070b;
+
+  /* 面板底色。alpha 是对比度的下限保证，不是纯装饰：
+     正文区（reading）比通用面板更实，见 .game__text。 */
+  --color-panel: rgba(11, 15, 23, 0.86);
+  --color-panel-reading: rgba(9, 12, 19, 0.92);
+  /* 按钮、开关这类控件的底：同样要在背景图上站得住。 */
+  --color-control-bg: rgba(16, 22, 32, 0.78);
+
   --color-text: #e6edf3;
-  --color-text-muted: #8b98a8;
-  --color-text-faint: #5d6878;
-  --color-border: rgba(148, 163, 184, 0.18);
+  --color-text-muted: #9aa7b8;
+  --color-text-faint: #8592a3;
+
+  --color-border: rgba(148, 163, 184, 0.2);
+  --color-border-strong: rgba(148, 163, 184, 0.32);
+
   --color-accent: #9dbbff;
   --color-accent-soft: rgba(157, 187, 255, 0.12);
-  --color-warning: #d9b48c;
+  --color-warning: #d8b56d;
   --color-danger: #d98c8c;
 
-  /* 形状与节奏 */
-  --radius-panel: 24px;
-  --radius-button: 14px;
-  --max-reading-width: 720px;
-  --transition-fast: 160ms ease;
-  --transition-normal: 280ms ease;
-
-  /* 字体 */
+  /* ---------- 排版 ---------- */
   --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     'Segoe UI', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+
+  /* 长时间阅读用的正文尺寸；移动端在断点里回到 16px。 */
+  --font-size-reading: 1.0625rem;
+  --line-height-reading: 1.85;
+  /* 系统日志、标签、进度这一类等宽小字。 */
+  --font-size-label: 0.72rem;
+  --letter-spacing-label: 0.14em;
+
+  /* ---------- 形状与节奏 ---------- */
+  --radius-panel: 22px;
+  --radius-card: 14px;
+  --radius-button: 14px;
+
+  --max-reading-width: 720px;
+  --max-content-width: 760px;
+  /*
+    1080 = 720（正文）+ 296（状态面板）+ 一段留白。
+    再宽的话正文列被 --max-reading-width 卡住不动，多出来的宽度全变成
+    正文与面板之间的空隙，两列看着就散了。
+  */
+  --max-stage-width: 1080px;
+
+  --space-block: 20px;
+  --space-section: 20px;
+
+  --shadow-panel: 0 24px 60px rgba(0, 0, 0, 0.42);
+
+  --transition-fast: 160ms ease;
+  --transition-normal: 280ms ease;
+  --transition-scene: 520ms ease;
 
   color-scheme: dark;
 }
@@ -41,16 +89,18 @@ body {
 }
 
 body {
+  /*
+    真正的背景在 .scene 里（position: fixed 的独立层）。
+    这里只留一层纯色兜底，避免场景层挂载前露出白底；
+    不使用 background-attachment: fixed —— 移动端上它既有性能问题也会跳动。
+  */
   background-color: var(--color-bg);
-  background-image:
-    radial-gradient(120% 90% at 50% -10%, rgba(157, 187, 255, 0.09), transparent 60%),
-    linear-gradient(180deg, var(--color-bg-soft), var(--color-bg) 55%);
-  background-attachment: fixed;
   color: var(--color-text);
   font-family: var(--font-sans);
   font-size: 16px;
-  line-height: 1.8;
+  line-height: 1.7;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   overflow-x: hidden;
 }
 
@@ -68,19 +118,214 @@ ul {
   list-style: none;
 }
 
+hr {
+  border: none;
+}
+
+img {
+  max-width: 100%;
+}
+
+/* ---------- 场景背景层（V02） ---------- */
+
+/*
+  自下而上四层：渐变兜底 → 背景图片 → 页面级暗色遮罩 → 内容面板（在各页面里）。
+
+  整层固定在视口上并且 pointer-events: none，因此结局页滚动时背景不动，
+  也不会挡住任何交互；aria-hidden 由组件加在根节点上，背景不进无障碍树。
+*/
+.scene {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: var(--color-bg);
+  contain: layout paint;
+}
+
+/* CSS 渐变兜底：图片没加载、加载失败或错误页时，看到的就是它。 */
+.scene__base {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(115% 80% at 76% 6%, rgba(157, 187, 255, 0.11), transparent 62%),
+    radial-gradient(90% 70% at 10% 104%, rgba(110, 140, 200, 0.07), transparent 70%),
+    linear-gradient(180deg, var(--color-bg-soft) 0%, var(--color-bg) 52%, var(--color-bg-deep) 100%);
+  transition: background-image var(--transition-scene);
+}
+
+/* 第四章：兜底渐变也只做一点点暖警示，不用大面积红。 */
+.scene[data-scene='control'] .scene__base {
+  background-image:
+    radial-gradient(115% 80% at 76% 6%, rgba(216, 181, 109, 0.08), transparent 60%),
+    radial-gradient(90% 70% at 10% 104%, rgba(110, 140, 200, 0.06), transparent 70%),
+    linear-gradient(180deg, #100e0d 0%, var(--color-bg) 52%, var(--color-bg-deep) 100%);
+}
+
+.scene__layer {
+  position: absolute;
+  inset: 0;
+  display: block;
+  opacity: 0;
+  transition: opacity var(--transition-scene);
+}
+
+/*
+  `start` 是唯一的成稿展示层。
+
+  `bg-start` 里的标题、宣传语、终端文字与排版都是成品内容，一旦 cover 裁剪就会切掉，
+  所以它单独走 contain：图片按自身比例完整显示，四周露出底色，绝不放大填满视口。
+  规则挂在场景键上而不是 surface 上 —— 换到序章时这一层正在淡出，
+  按 surface 写会让它中途从 contain 跳成 cover，看得见一次突变。
+
+  其余场景（序章与各章节氛围图）保持 cover 铺满，不受影响。
+*/
+.scene__layer[data-scene-key='start'] {
+  display: grid;
+  place-items: center;
+}
+
+.scene__layer[data-scene-key='start'] .scene__image {
+  /* 收缩到实际显示尺寸：mask 的作用范围才会正好等于图片本身，而不是整个视口。 */
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  /* grid 项的自动最小尺寸是内容尺寸（1672×941），不归零的话 max-* 压不住它，
+     视口比成稿宽时图片会按原始大小溢出，下缘被切掉。 */
+  min-width: 0;
+  min-height: 0;
+  object-fit: contain;
+  /* 成稿保持原始亮度与色彩，不压暗、不去饱和。 */
+  filter: none;
+
+  /*
+    四周边缘融合：只把成稿最外圈很窄的一条淡出，弱化矩形边界，
+    不是给整张图加暗角。左／上留得比右／下窄，因为左上角有「M」标记
+    和顶部那行小字（图片 2%–8%），右下方向最近的内容也在 82% 以内。
+  */
+  -webkit-mask-image:
+    linear-gradient(to right, transparent 0, #000 1.6%, #000 96%, transparent 100%),
+    linear-gradient(to bottom, transparent 0, #000 2.4%, #000 96.5%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent 0, #000 1.6%, #000 96%, transparent 100%),
+    linear-gradient(to bottom, transparent 0, #000 2.4%, #000 96.5%, transparent 100%);
+  mask-composite: intersect;
+}
+
+.scene__layer[data-active='true'] {
+  opacity: var(--scene-opacity-desktop, 0.9);
+}
+
+.scene__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: var(--scene-position-desktop, 50% 50%);
+  /* 图片本身再压一次暗部与饱和度，避免高光顶穿遮罩。 */
+  filter: saturate(0.9) brightness(0.94);
+  transition: filter var(--transition-scene);
+}
+
+/* 页面级暗色遮罩：按页面区分方向与强度。 */
+.scene__scrim {
+  position: absolute;
+  inset: 0;
+  opacity: 1;
+  transition: opacity var(--transition-scene);
+}
+
+/* 没有图片时（错误页 / 加载失败）不再叠遮罩，纯渐变自己就是完整画面。 */
+.scene[data-image='none'] .scene__scrim {
+  opacity: 0;
+}
+
+/*
+  开始页：成稿展示模式，完全没有全局遮罩。
+
+  成稿是要看见的内容，上面不叠任何深色层。图片以 contain 完整显示，
+  四周露出的底色由下面这层与成稿边缘色调协调的暗色渐变承担，
+  加上图片自身的边缘 mask，两边一起把矩形边界化掉。
+  按钮压在成稿留白处，靠按钮自己的实色底保证对比度，不需要额外承托。
+*/
+.scene[data-surface='start'] .scene__scrim {
+  background-image: none;
+}
+
+/* 底色向成稿四角的黑靠拢，让露出的部分看起来像画面继续往外延伸。 */
+.scene[data-surface='start'] .scene__base {
+  background-image: radial-gradient(
+    122% 104% at 50% 46%,
+    #0a0e15 0%,
+    #070a10 56%,
+    #04060a 100%
+  );
+}
+
+/*
+  剧情页：正文一侧压到近乎全黑，右侧留出画面。
+
+  两道渐变相乘：竖向负责顶部标题区的暗部，横向负责「左边读字、右边看图」。
+  左列合成后约 0.94 不透明，右缘约 0.63 —— 章节之间的氛围差别全靠这一段，
+  再暗一点五张图就会长得一模一样。
+*/
+.scene[data-surface='game'] .scene__scrim {
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(5, 8, 12, 0.82) 0%,
+      rgba(5, 8, 12, 0.62) 32%,
+      rgba(5, 8, 12, 0.7) 100%
+    ),
+    linear-gradient(
+      90deg,
+      rgba(5, 8, 12, 0.86) 0%,
+      rgba(5, 8, 12, 0.82) 48%,
+      rgba(5, 8, 12, 0.52) 60%,
+      rgba(5, 8, 12, 0.18) 78%,
+      rgba(5, 8, 12, 0.02) 100%
+    );
+}
+
+/*
+  结局页：顶部压暗给标题留白，画面主体留在中段两侧的空白里。
+
+  暗角中心特意放在 62% 而不是正中：结局标题是全篇字号最大、周围没有面板托底的一段，
+  背景图那条竖直光带正好从它后面穿过，中心放低才能保证标题区始终是暗的。
+*/
+.scene[data-surface='ending'] .scene__scrim {
+  background-image:
+    radial-gradient(
+      120% 96% at 50% 62%,
+      rgba(5, 8, 12, 0.44) 0%,
+      rgba(5, 8, 12, 0.74) 62%,
+      rgba(5, 8, 12, 0.9) 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(5, 8, 12, 0.72) 0%,
+      rgba(5, 8, 12, 0.3) 34%,
+      rgba(5, 8, 12, 0.52) 100%
+    );
+}
+
 /* ---------- 布局骨架 ---------- */
 
 .app-shell {
+  position: relative;
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  isolation: isolate;
 }
 
 .screen {
   flex: 1;
   width: 100%;
-  padding: 48px 20px 56px;
+  padding: 48px 24px 56px;
   display: flex;
   justify-content: center;
   /*
@@ -89,9 +334,10 @@ ul {
     让每个 screen 自己成为包含块，隐藏文本层就永远留在页面内部。
   */
   position: relative;
+  /* 内容永远在场景层之上。 */
+  z-index: 1;
 }
 
-.screen--start,
 .screen--ending {
   align-items: center;
 }
@@ -100,7 +346,7 @@ ul {
 
 .eyebrow {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--font-size-label);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--color-text-faint);
@@ -119,12 +365,19 @@ ul {
   white-space: nowrap;
 }
 
+/*
+  内容面板：背景层的第四层。
+
+  半透明实色底 + 细边框，模糊只是加分项 —— 即使浏览器不支持 backdrop-filter，
+  或者用户关掉了它，正文对比度也完全由这层实色底保证。
+*/
 .panel {
-  background: var(--color-panel);
+  background-color: var(--color-panel);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-panel);
   padding: 24px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(10px) saturate(1.05);
 }
 
 .button {
@@ -133,9 +386,9 @@ ul {
   gap: 12px;
   min-height: 48px;
   padding: 12px 22px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-button);
-  background: var(--color-accent-soft);
+  background-color: var(--color-control-bg);
   color: var(--color-text);
   font: inherit;
   line-height: 1.6;
@@ -144,12 +397,13 @@ ul {
   transition:
     border-color var(--transition-fast),
     background-color var(--transition-fast),
+    color var(--transition-fast),
     transform var(--transition-fast);
 }
 
 .button:hover {
-  border-color: rgba(157, 187, 255, 0.45);
-  background: rgba(157, 187, 255, 0.18);
+  border-color: rgba(157, 187, 255, 0.5);
+  background-color: rgba(30, 42, 62, 0.86);
 }
 
 .button:active {
@@ -164,35 +418,44 @@ ul {
 .button:disabled {
   cursor: default;
   color: var(--color-text-muted);
-  border-color: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.16);
 }
 
 .button:disabled:hover {
-  border-color: rgba(148, 163, 184, 0.12);
-  background: rgba(15, 20, 30, 0.55);
+  border-color: rgba(148, 163, 184, 0.16);
+  background-color: rgba(14, 19, 28, 0.7);
+  transform: none;
 }
 
 .button--primary {
   justify-content: center;
   letter-spacing: 0.04em;
+  background-color: rgba(26, 37, 58, 0.88);
+  border-color: rgba(157, 187, 255, 0.34);
 }
 
 /* 次要动作：与主按钮同尺寸，但不争夺视觉重心。 */
 .button--ghost {
   justify-content: center;
   letter-spacing: 0.04em;
-  background: transparent;
+  background-color: rgba(10, 14, 21, 0.6);
+  border-color: var(--color-border);
   color: var(--color-text-muted);
 }
 
 .button--ghost:hover {
   color: var(--color-text);
+  background-color: rgba(20, 27, 40, 0.72);
 }
 
 .button--choice {
   width: 100%;
   align-items: flex-start;
-  background: rgba(15, 20, 30, 0.55);
+  background-color: rgba(13, 18, 27, 0.82);
+}
+
+.button--choice:hover {
+  background-color: rgba(24, 33, 49, 0.88);
 }
 
 .button__label {
@@ -215,55 +478,127 @@ ul {
 
 /* ---------- StartPage ---------- */
 
+/*
+  开始页是「成稿展示 + 一组按钮」。
+
+  可见的标题、副标题、说明和右侧终端都画在 bg-start 里，页面不重复渲染，
+  只负责把操作区放到成稿预留的留白处（桌面在左栏中下部，移动端在底部）。
+  DOM 里的那段文字默认 `.sr-only`，不占布局，只给屏幕阅读器。
+*/
+/* 双类选择器：后面的响应式断点里还有单类的 `.screen` 内边距规则，这里要压过它。 */
+.screen.screen--start {
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0;
+}
+
 .start__inner {
+  position: relative;
   width: 100%;
-  max-width: var(--max-reading-width);
+  min-height: 100%;
+}
+
+/*
+  按钮落点跟着成稿的留白走（成稿是 contain，位置要按「实际显示出来的那块图」算）。
+
+  桌面成稿 1672×941（比例 1.777）。contain 有两种情形，两条式子各自成立，
+  再用 min / max 自动选中正确的一条 —— 不需要写 aspect-ratio 媒体查询：
+
+  - 视口比成稿方（vw / vh < 1.777，例如 1440×900、1024×768）：按宽度铺满，
+    上下留黑边。图片高度 = 0.5628vw，顶部偏移 = (vh − 0.5628vw) / 2。
+    图片纵向 g 处 → `50vh + 56.28vw × (g − 0.5)`；图片横向 f 处 → `f × vw`。
+  - 视口比成稿宽：按高度铺满，左右留黑边。
+    纵向 g 处 → `g × vh`；横向 f 处 → `50vw + 177.7vh × (f − 0.5)`。
+
+  取 f = 9.5%（成稿左栏起点）、g = 68%（细分割线 62% 与底部说明 77% 之间那段留白，
+  偏中心一点，让 51px 高的按钮在图片被缩得较小时两头都留得住）：
+  横向两式分别是 `9.5vw` 与 `50vw − 71.97vh`，正确的一条总是较大的那个 → max()；
+  纵向两式分别是 `50vh + 10.13vw` 与 `68vh`，正确的一条总是较小的那个 → min()。
+
+  translateY(-50%) 让 top 表示按钮组的**中心**：一个按钮和两个按钮时视觉中心一致。
+*/
+.start__actions {
+  position: absolute;
+  top: min(calc(50vh + 10.13vw), 68vh);
+  left: max(9.5vw, calc(50vw - 71.97vh));
+  transform: translateY(-50%);
+  /* 只给 left：绝对定位元素按内容收缩，不会铺出一层看不见的整宽覆盖物。 */
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  max-width: calc(100% - 48px);
+}
+
+.start__actions .button {
+  min-width: 208px;
+  flex: none;
+}
+
+/* 成稿加载失败时的可见兜底：回到普通的居中单栏排版。 */
+.screen--start[data-fallback='true'] {
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px 56px;
+}
+
+.screen--start[data-fallback='true'] .start__inner {
+  min-height: 0;
+  max-width: var(--max-stage-width);
+}
+
+.screen--start[data-fallback='true'] .start__intro {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
+  max-width: 560px;
+}
+
+.screen--start[data-fallback='true'] .start__actions {
+  position: static;
+  transform: none;
+  margin-top: 28px;
 }
 
 .start__title {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   margin-top: 4px;
 }
 
 .start__title-en {
-  font-size: clamp(2.1rem, 8vw, 3.4rem);
+  font-size: clamp(2.2rem, 6.4vw, 3.4rem);
   font-weight: 600;
   letter-spacing: 0.08em;
-  line-height: 1.1;
+  line-height: 1.08;
 }
 
 .start__title-zh {
-  font-size: clamp(1.1rem, 4.5vw, 1.5rem);
+  font-size: clamp(1.1rem, 3.4vw, 1.45rem);
   font-weight: 400;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.34em;
   color: var(--color-text-muted);
 }
 
 .start__subtitle {
-  font-size: clamp(1rem, 3.6vw, 1.2rem);
+  font-size: clamp(1.02rem, 2.4vw, 1.18rem);
+  line-height: 1.7;
   color: var(--color-accent);
 }
 
+/* 标题区与说明之间的一道细线，代替多余的分组容器。 */
+.start__rule {
+  width: 64px;
+  height: 1px;
+  margin: 2px 0;
+  background: linear-gradient(90deg, rgba(157, 187, 255, 0.55), rgba(157, 187, 255, 0));
+}
+
 .start__description {
-  color: var(--color-text-muted);
-}
-
-/* 有未完成存档时这里是「继续实验」+「重新初始化」两个按钮。 */
-.start__actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.start__inner .button {
-  align-self: flex-start;
-  min-width: 200px;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--color-text-muted);
 }
 
 /* ---------- GamePage ---------- */
@@ -297,16 +632,23 @@ ul {
   */
   overflow-y: auto;
   overflow-x: hidden;
+  padding-top: 32px;
   padding-bottom: 28px;
 }
 
 .game__layout {
   width: 100%;
-  max-width: 1080px;
+  max-width: var(--max-stage-width);
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  gap: 32px;
+  /*
+    阅读区约 680–760px、状态面板 260–296px（docs/04 §5.2）。
+
+    面板宽度用 clamp 让它在中等宽度先让步：1024px 下实测正文列 693px、面板 260px，
+    两边都还在规格区间内，不会出现「面板占住 300px、正文被挤到 650」的拥挤感。
+  */
+  grid-template-columns: minmax(0, 1fr) clamp(260px, 22vw, 296px);
+  gap: clamp(24px, 3vw, 36px);
   align-items: start;
 }
 
@@ -318,13 +660,13 @@ ul {
   max-width: var(--max-reading-width);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
 }
 
 .game__header {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px 16px;
   justify-content: space-between;
   align-items: baseline;
   border-bottom: 1px solid var(--color-border);
@@ -340,7 +682,8 @@ ul {
 
 .game__progress {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--font-size-label);
+  letter-spacing: 0.08em;
   color: var(--color-text-faint);
 }
 
@@ -357,17 +700,18 @@ ul {
   padding: 5px 10px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: transparent;
+  background-color: rgba(10, 14, 21, 0.55);
   color: var(--color-text-faint);
   font: inherit;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--font-size-label);
   letter-spacing: 0.1em;
   line-height: 1.4;
   cursor: pointer;
   transition:
     border-color var(--transition-fast),
-    color var(--transition-fast);
+    color var(--transition-fast),
+    background-color var(--transition-fast);
 }
 
 .autoplay-toggle:hover {
@@ -396,9 +740,10 @@ ul {
 }
 
 .game__title {
-  font-size: clamp(1.4rem, 5vw, 1.9rem);
+  font-size: clamp(1.35rem, 3.4vw, 1.75rem);
   font-weight: 500;
   letter-spacing: 0.02em;
+  line-height: 1.35;
 }
 
 /*
@@ -407,6 +752,9 @@ ul {
   占满剧情列的剩余高度，内容超出后在自己内部出现纵向滚动条；
   overscroll-behavior 阻止滚到头时把滚动传给页面。
   min-height 保证极端情况下正文仍有一块可读区域。
+
+  比通用面板更不透明：正文是全篇阅读时间最长的区域，
+  这里不让背景图参与对比度计算（V01 / V02）。
 */
 .game__text {
   /* 逐字块里的 .sr-only 完整文本层跟着滚动内容走，不跑到容器外面。 */
@@ -416,6 +764,8 @@ ul {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  padding: 26px 28px;
+  background-color: var(--color-panel-reading);
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
@@ -468,12 +818,12 @@ ul {
 .game__choices {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .game__continue {
   align-self: flex-start;
-  min-width: 200px;
+  min-width: 208px;
 }
 
 /* ---------- 剧情文本块 ---------- */
@@ -481,7 +831,9 @@ ul {
 .story-blocks {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: var(--space-block);
+  font-size: var(--font-size-reading);
+  line-height: var(--line-height-reading);
 }
 
 /* 选项专属回应：与正文之间加一道细线，提示这是刚才那次选择的结果。 */
@@ -522,7 +874,7 @@ ul {
 }
 
 .block__text + .block__text {
-  margin-top: 10px;
+  margin-top: 0.7em;
 }
 
 /* 面板类块的小标题，等宽字体，像系统输出。 */
@@ -532,8 +884,8 @@ ul {
   gap: 4px 12px;
   justify-content: space-between;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.14em;
+  font-size: var(--font-size-label);
+  letter-spacing: var(--letter-spacing-label);
   color: var(--color-text-faint);
   margin-bottom: 10px;
 }
@@ -543,6 +895,7 @@ ul {
   flex-direction: column;
   font-family: var(--font-mono);
   font-size: 0.85rem;
+  line-height: 1.6;
 }
 
 .block__line {
@@ -574,7 +927,7 @@ ul {
 }
 
 .block--dialogue-agent {
-  border-left-color: rgba(157, 187, 255, 0.4);
+  border-left-color: rgba(157, 187, 255, 0.45);
 }
 
 .block--dialogue-player {
@@ -618,7 +971,7 @@ ul {
 
 .block__divider-label {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--font-size-label);
   letter-spacing: 0.16em;
 }
 
@@ -628,13 +981,13 @@ ul {
 .block--message,
 .block--document {
   border: 1px solid var(--color-border);
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   padding: 16px 18px;
-  background: rgba(8, 11, 16, 0.5);
+  background-color: rgba(6, 9, 14, 0.55);
 }
 
 .block--system-warning {
-  border-color: rgba(217, 180, 140, 0.4);
+  border-color: rgba(216, 181, 109, 0.42);
 }
 
 .block--system-warning .block__label,
@@ -643,7 +996,7 @@ ul {
 }
 
 .block--record-incident {
-  border-color: rgba(217, 180, 140, 0.28);
+  border-color: rgba(216, 181, 109, 0.28);
 }
 
 .block--message-self {
@@ -661,7 +1014,7 @@ ul {
 .block__status {
   margin-top: 10px;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--font-size-label);
   letter-spacing: 0.1em;
   color: var(--color-text-faint);
   text-align: right;
@@ -679,16 +1032,21 @@ ul {
 }
 
 .button--choice-danger {
-  border-color: rgba(217, 140, 140, 0.3);
+  border-color: rgba(217, 140, 140, 0.36);
 }
 
 .button--choice-primary {
-  background: var(--color-accent-soft);
+  border-color: rgba(157, 187, 255, 0.34);
+  background-color: rgba(24, 34, 52, 0.84);
 }
 
-/* 第四章的失控段落只做轻微压暗，不做闪烁。 */
+/* 第四章的失控段落只做轻微压暗与暖边，不做闪烁、不做大面积红。 */
 .screen--game[data-mode='control'] .game__text {
-  border-color: rgba(217, 180, 140, 0.22);
+  border-color: rgba(216, 181, 109, 0.24);
+}
+
+.screen--game[data-mode='control'] .game__header {
+  border-bottom-color: rgba(216, 181, 109, 0.24);
 }
 
 /* ---------- AI 状态面板 ---------- */
@@ -702,9 +1060,9 @@ ul {
 
 .status__title {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--font-size-label);
   font-weight: 500;
-  letter-spacing: 0.16em;
+  letter-spacing: var(--letter-spacing-label);
   color: var(--color-text-faint);
 }
 
@@ -747,7 +1105,7 @@ ul {
 
 /* control 模式只改边框和提示语颜色，不加红块、不闪烁。 */
 .status[data-mode='control'] {
-  border-color: rgba(217, 180, 140, 0.3);
+  border-color: rgba(216, 181, 109, 0.32);
 }
 
 .status[data-mode='control'] .status__title,
@@ -768,41 +1126,62 @@ ul {
 
 .ending__inner {
   width: 100%;
-  max-width: var(--max-reading-width);
+  max-width: var(--max-content-width);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-section);
+}
+
+.ending__header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  padding: 8px 0 4px;
 }
 
 .ending__title {
-  font-size: clamp(1.6rem, 6vw, 2.3rem);
+  font-size: clamp(1.7rem, 5vw, 2.4rem);
   font-weight: 500;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
 }
 
 .ending__description {
+  max-width: 34em;
+  color: var(--color-text-muted);
+}
+
+.ending__body {
+  padding: 28px;
+}
+
+/* 结尾句：单独一段，比正文更安静。 */
+.ending__final {
+  padding: 4px 2px 8px;
   color: var(--color-text-muted);
 }
 
 .report {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   color: var(--color-text-muted);
 }
 
 .report__title {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--font-size-label);
   font-weight: 500;
-  letter-spacing: 0.16em;
+  letter-spacing: var(--letter-spacing-label);
   color: var(--color-text-faint);
 }
 
 .ending__inner .button {
-  align-self: flex-start;
-  margin-top: 12px;
-  min-width: 200px;
+  align-self: center;
+  margin-top: 4px;
+  min-width: 220px;
 }
 
 /* 开发验证区：临时区块，正式结局报告实现后会连同标记一起移除。 */
@@ -811,15 +1190,16 @@ ul {
   flex-direction: column;
   gap: 10px;
   border-style: dashed;
+  box-shadow: none;
   font-size: 0.9rem;
   color: var(--color-text-muted);
 }
 
 .dev-summary__title {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--font-size-label);
   font-weight: 500;
-  letter-spacing: 0.16em;
+  letter-spacing: var(--letter-spacing-label);
   color: var(--color-warning);
 }
 
@@ -865,7 +1245,7 @@ ul {
 }
 
 .error__message {
-  border-color: rgba(217, 140, 140, 0.35);
+  border-color: rgba(217, 140, 140, 0.38);
   color: var(--color-danger);
   overflow-wrap: anywhere;
 }
@@ -877,7 +1257,7 @@ ul {
 .error__inner .button {
   align-self: flex-start;
   margin-top: 8px;
-  min-width: 200px;
+  min-width: 208px;
 }
 
 /* ---------- 动效 ---------- */
@@ -915,16 +1295,28 @@ ul {
 
 /* ---------- 响应式 ---------- */
 
+/* 中等宽度：舞台边距先收，状态面板由 clamp 让步，正文列不被挤窄。 */
+@media (max-width: 1180px) {
+  .screen {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+
 @media (max-width: 900px) {
   /*
     单列时改用 flex 列：状态面板保持内容高度，剧情列吃掉剩余高度。
     grid 在这里更脆弱 —— 状态面板可以被隐藏（ui.hideStatusPanel），
     行数会变，写死的 grid-template-rows 就会失效。
+
+    align-items 必须显式改回 stretch：基础规则里的 start 在列向 flex 下
+    会让状态面板缩成内容宽度，看起来像一张漏排的窄卡片。
   */
   .game__layout {
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    align-items: stretch;
+    gap: 20px;
   }
 
   .game__main {
@@ -958,43 +1350,238 @@ ul {
 }
 
 @media (max-width: 768px) {
+  :root {
+    /* 移动端正文回到 16px：再小就不适合长时间阅读。 */
+    --font-size-reading: 1rem;
+    --line-height-reading: 1.8;
+    --radius-panel: 18px;
+    --space-block: 16px;
+    --space-section: 16px;
+  }
+
   .screen {
-    padding: 32px 16px 44px;
+    padding: 28px max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom))
+      max(16px, env(safe-area-inset-left));
+  }
+
+  /* 开始页仍然是整屏成稿，边距由 .start__actions 自己处理。 */
+  .screen--start {
+    padding: 0;
+  }
+
+  .screen--start[data-fallback='true'] {
+    padding: 28px max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom))
+      max(16px, env(safe-area-inset-left));
   }
 
   /* 窄屏留给正文的高度本来就紧：底部不再多留白，主体间距也收一收。 */
   .screen--game {
-    padding-bottom: 20px;
+    padding-top: 20px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
   }
 
   .game__layout {
-    gap: 16px;
-  }
-
-  .game__main {
     gap: 14px;
   }
 
-  /* 开关紧挨着大片推进热区，窄屏下把点击目标放大一点，减少误触。 */
+  .game__main {
+    gap: 12px;
+  }
+
+  /*
+    开关紧挨着大片推进热区，窄屏下把点击目标放大一点，减少误触。
+
+    ::after 只把可点区域撑到 44px 以上，胶囊本身保持小尺寸：
+    直接加高会把章节头撑开，抢走本来就不多的正文高度（I01 的固定舞台）。
+  */
   .autoplay-toggle {
+    position: relative;
     padding: 9px 12px;
   }
 
-  .panel {
-    padding: 20px;
-    border-radius: 20px;
+  .autoplay-toggle::after {
+    content: '';
+    position: absolute;
+    inset: -5px -4px;
   }
 
-  .start__inner .button,
+  /*
+    移动端的背景图。
+
+    换的是竖版资源（由 <picture> 的 source media 决定，断点必须与这里一致），
+    同时进一步降低存在感：小屏上正文占满整个宽度，图片再亮就只剩干扰。
+  */
+  .scene__layer[data-active='true'] {
+    opacity: var(--scene-opacity-mobile, 0.55);
+  }
+
+  .scene__image {
+    object-position: var(--scene-position-mobile, 50% 50%);
+  }
+
+  /*
+    剧情页同理：单列布局下没有「左边读字、右边看图」，
+    横向渐变只会让右边缘的进度与开关落在偏亮的底上，改成竖向均匀压暗。
+  */
+  .scene[data-surface='game'] .scene__scrim {
+    background-image: linear-gradient(
+      180deg,
+      rgba(5, 8, 12, 0.86) 0%,
+      rgba(5, 8, 12, 0.74) 38%,
+      rgba(5, 8, 12, 0.84) 100%
+    );
+  }
+
+  /* 顺序要求：.game__text / .ending__body / .status 都带 .panel 类，
+     同为单类选择器，必须写在 .panel 之后才能覆盖它的内边距。 */
+  .panel {
+    padding: 18px;
+  }
+
+  .game__text {
+    padding: 18px 16px;
+  }
+
+  .ending__body {
+    padding: 20px 18px;
+  }
+
+  /*
+    移动端状态面板压成一条系统状态带。
+
+    标题与提示语并到同一行，四个状态项各自「标签 + 状态」同行，
+    整体高度约为原来的一半 —— 窄屏上正文高度本来就紧，
+    面板不能先吃掉首屏（docs/04 §9）。
+  */
+  .status {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 12px 16px;
+    gap: 8px 12px;
+  }
+
+  .status__hint {
+    order: 2;
+  }
+
+  .status__list {
+    order: 3;
+    width: 100%;
+    column-gap: 14px;
+  }
+
+  .status__item {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 2px 8px;
+    padding: 6px 0;
+    font-size: 0.82rem;
+  }
+
+  .status__item dt {
+    font-size: 0.72rem;
+  }
+
+  .status__item dd {
+    text-align: right;
+  }
+
   .ending__inner .button,
   .error__inner .button {
     align-self: stretch;
     width: 100%;
+    min-width: 0;
+  }
+
+  /*
+    移动端按钮落在画面中下部，不贴安全区底端。
+
+    竖版成稿 941×1672（比例 0.5628）的构图是：标题 26%–47%、副标题 52%–55%、
+    一段留白 57%–73%、细分割线 74%、底部说明 77%–80%。
+    「预留的按钮区域」就是中间那段留白，取它偏下的位置 g = 64.5% 作为按钮组中心。
+
+    contain 同样两种情形，写法与桌面一致：
+    - 视口比成稿窄（0.462、0.5 这类手机）：按宽度铺满 → `50vh + 177.68vw × (g − 0.5)`；
+    - 视口比成稿宽（横屏）：按高度铺满 → `g × vh`。
+    取较小的一条即可。
+
+    两个按钮并排而不是上下堆叠：堆叠会把按钮组顶到细分割线和底部说明上。
+    320px 下每个按钮仍有 139×51px，文案不折行，也没有横向滚动；
+    只有一个按钮时 flex: 1 会让它撑满整行。
+  */
+  .start__actions {
+    top: min(calc(50vh + 25.76vw), 64.5vh);
+    left: max(16px, env(safe-area-inset-left));
+    right: max(16px, env(safe-area-inset-right));
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 10px;
+    max-width: none;
+  }
+
+  .start__actions .button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .screen--start[data-fallback='true'] .start__actions {
+    position: static;
+    margin-top: 24px;
   }
 
   /* 窄屏优先保证选项文案可读，语气标签让位。 */
   .button__label {
     display: none;
+  }
+
+  .block--message-self {
+    margin-left: 12px;
+  }
+
+  .block--message-other {
+    margin-right: 12px;
+  }
+
+  .block--dialogue-player {
+    margin-left: 10px;
+  }
+}
+
+/* 320px 一类的极窄屏：只收内边距，不再缩小正文。 */
+@media (max-width: 360px) {
+  .screen {
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+  }
+
+  .game__text {
+    padding: 16px 14px;
+  }
+
+  .button {
+    padding: 12px 16px;
+    gap: 10px;
+  }
+
+  /*
+    320px 下状态项仍然「标签 + 状态」同行，但字号再收一档。
+
+    单元格只有约 123px，按 768 断点的字号最长的两组会折行，
+    面板高度从 164px 涨回 191px —— 在 640px 高的屏上这一下就吃掉 4% 首屏。
+    收到 0.68 / 0.78rem 后实测最长的一组（语气 / 保护偏向未建立）约 115px，
+    四行都能单行放下。这里只影响状态标签，正文仍然是 16px。
+  */
+  .status__item {
+    font-size: 0.78rem;
+    gap: 2px 6px;
+  }
+
+  .status__item dt {
+    font-size: 0.68rem;
   }
 }
 

@@ -11,7 +11,7 @@
 | 前期文档 | D03 | 交互设计文档 | `docs/03-interaction-design.md` | P0 | 已完成 | 页面流程、交互状态、存档、移动端规则清楚 | 本文档包已生成 |
 | 前期文档 | D04 | UI 与视觉效果文档 | `docs/04-ui-visual-spec.md` | P0 | 已完成 | 视觉方向、字体、图标库、页面效果、素材需求清楚 | 本文档包已生成 |
 | 前期准备 | P01 | 生成页面 UI 效果图 | `design/ui-mockups/*.webp` | P1 | 已完成 | 开始页、游戏页、结局页至少各 1 张 | 已用chatGPT生成；桌面／移动共 8 张，清单见 `docs/05-assets-map.md` §2。只作设计参考，不参与运行时打包 |
-| 前期准备 | P02 | 生成背景图与插画 | `src/assets/backgrounds/*` | P1 | 已完成 | 至少 6 张统一风格背景图 | 已用chatGPT生成；桌面与移动各 6 张 WebP，映射见 `docs/05-assets-map.md` §3。素材已就位，运行时接入属于 V02 |
+| 前期准备 | P02 | 生成背景图与插画 | `src/assets/backgrounds/*` | P1 | 已完成 | 至少 6 张统一风格背景图 | 已用chatGPT生成；桌面与移动各 7 张 WebP，映射见 `docs/05-assets-map.md` §3。素材已就位，运行时接入属于 V02 |
 | 前期准备 | P03 | 音频素材与授权记录 | `public/audio/bgm/*`、`public/audio/sfx/*`、`credits/audio-credits.md` | P1 | 已完成 | BGM 与 SFX 文件存在；文件名与 `docs/05-assets-map.md` §6–§7 映射一致；每个文件的来源、作者、下载链接与授权记录完整 | 4 个 BGM + 5 个 SFX 已下载并按目标文件名放置；`credits/audio-credits.md` 记录了原始文件名、作者、Pixabay 来源、下载链接与用途。仅指素材与授权，运行时接入属于 A01–A03 |
 | 工程基础 | E01 | 初始化项目 | Vite + React + TypeScript 项目 | P0 | 已完成 | `npm install`、`npm run dev`、`npm run build` 成功 | Vite + React + TypeScript 已初始化，`npm run build` 已通过；未接真实 AI API，GitHub Pages base 路径留到部署阶段 |
 | 工程基础 | E02 | 建立基础页面 | `src/pages/` 下 Start/Game/Ending 三个页面 | P0 | 已完成 | 能从开始页进入游戏页，再进入结局页 | 三页基础流转已打通。当时的占位内容 `src/data/demoFlow.ts` 已在 G03 中删除，现由 `src/data/story/` 的正式节点数据驱动；另有 `DataErrorPage` 作为数据损坏出口 |
@@ -27,8 +27,8 @@
 | 音频体验 | A01 | 启动遮罩与音频管理 | `StartupGate` 覆盖层、全局音频管理 | P1 | 未开始 | 详见下方“A01 验收标准” | 依赖 P03；流程以 `docs/03-interaction-design.md` §2 为准 |
 | 音频体验 | A02 | BGM 场景映射与切换 | BGM 场景映射与切换逻辑 | P1 | 未开始 | 详见下方“A02 验收标准” | 依赖 A01；映射与切换边界见 `docs/05-assets-map.md` §6 |
 | 音频体验 | A03 | SFX 接入与音量平衡 | 音效触发与音量策略 | P2 | 未开始 | 详见下方“A03 验收标准” | 依赖 A01；时间不足时可延后，不阻塞通关 |
-| 视觉实现 | V01 | 全局视觉风格 | `src/styles/global.css` | P1 | 进行中 | 暗色、安静、AI 终端感、可读性好 | 已有基础暗色样式、面板与块级排版；色彩变量、动效规范与结局页仪式感仍需按 `docs/04-ui-visual-spec.md` 打磨。不要赛博朋克霓虹过量 |
-| 视觉实现 | V02 | 页面背景与插画接入 | 背景图、渐变、遮罩 | P1 | 未开始 | 每章有氛围区分且风格统一 | 背景不抢文本 |
+| 视觉实现 | V01 | 全局视觉风格 | `src/styles/global.css` | P1 | 已完成 | 暗色、安静、AI 终端感、可读性好 | 变量分组重排、字体层级、面板与按钮底色、开始页成稿构图、结局页仪式感、状态面板移动端压缩、1024px 拥挤修复。正文桌面 17px／移动 16px，实测对比度全部 ≥ 4.5:1。视觉规范见 `docs/04-ui-visual-spec.md` |
+| 视觉实现 | V02 | 页面背景与插画接入 | 背景图、渐变、遮罩 | P1 | 已完成 | 每章有氛围区分且风格统一 | 七个视觉场景（start / prologue / 第一至第五章-结局）。场景解析集中在 `utils/visualScene.ts` + `data/visualScenes.ts`，背景层组件 `components/visual/SceneBackground.tsx`。只在场景键变化时换图，一次完整通关恰好 7 次图片请求、7 个唯一 URL。`bg-start` 是开始页成稿，`contain` 完整显示；序章用独立的 `bg-prologue`。资源映射见 `docs/05-assets-map.md` §3 |
 | 传播功能 | S01 | 复制镜像报告 | 结局页按钮 | P2 | 未开始 | 可复制结局标题、报告、变量描述 | 不支持 Clipboard 时要降级 |
 | 部署发布 | DEP01 | GitHub Pages 配置 | `vite.config.ts`、README | P0 | 未开始 | `npm run build` 通过并可部署 | 注意 base 路径 |
 | 测试打磨 | T01 | 移动端适配 | CSS 响应式 | P1 | 未开始 | 320px 宽度可玩，按钮易点 | 重点测手机浏览器 |

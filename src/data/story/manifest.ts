@@ -16,7 +16,8 @@ export const storyManifest = {
       title: '序章：创建你的代理',
       shortTitle: '创建你的代理',
       entryNodeId: 'prologue.initialization',
-      backgroundKey: 'start',
+      // 序章有自己的背景：同一个房间，但画面里没有开始页成稿的标题与宣传语。
+      backgroundKey: 'prologue',
       musicKey: 'main_theme',
     },
     {
