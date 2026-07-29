@@ -54,7 +54,12 @@ export type BaseBlock = {
   id?: string
   /** 条件不满足的块不渲染，也不留空白占位。 */
   when?: StoryCondition
-  /** 打字机节奏提示，本阶段不消费，保留给 I01。 */
+  /**
+   * 阅读节奏提示（I01）。
+   *
+   * `slow` 放慢逐字速度，`instant` 让整块立即显示。
+   * 消费点在 utils/story/readingPlan.ts，只影响展示层。
+   */
   pacing?: 'normal' | 'slow' | 'instant'
   emphasis?: 'normal' | 'muted' | 'strong' | 'warning'
 }

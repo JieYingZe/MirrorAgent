@@ -16,10 +16,32 @@ export const startContent = {
   restartAction: '重新初始化',
 }
 
-/** 剧情页的通用按钮文案，不属于任何具体节点。 */
+/** 剧情页的通用按钮与阅读提示文案，不属于任何具体节点。 */
 export const gameContent = {
   continueAction: '继续',
   endingGateAction: '查看镜像报告',
+  /**
+   * 正文播放中的提示，显示在交互区位置。
+   *
+   * 两种偏好下的动作不同：关闭自动播放时点击是「读下一段」，
+   * 开启时点击是「把这一页看完」，提示必须如实反映当前行为。
+   */
+  readingHintManual: '点击 / Enter / 空格 继续阅读',
+  readingHintAutoplay: '自动播放中 · 点击可显示整页',
+
+  /** 自动播放开关。默认关闭，偏好保存在独立的本地用户偏好里。 */
+  autoplayLabel: '自动播放',
+  autoplayStateOn: '开',
+  autoplayStateOff: '关',
+  autoplayAriaOn: '自动播放：已开启',
+  autoplayAriaOff: '自动播放：已关闭',
+  /**
+   * 正文显示完成时的一次性播报。
+   *
+   * 只播报状态，不逐字播报正文（见 docs/03-interaction-design.md §11）。
+   */
+  readingCompleteHint: '本节文本已显示完毕。',
+  choicesReadyHint: '选择现已可用。',
 }
 
 /**

@@ -16,8 +16,10 @@ import {
   getEndingDefinition,
   getStoryNode,
   loadStorySave,
+  responseSequenceKey,
   saveStorySave,
 } from './utils/story'
+import { useAutoplayPreference } from './hooks/useAutoplayPreference'
 
 type Screen = 'start' | 'game' | 'ending'
 
@@ -25,6 +27,11 @@ type Screen = 'start' | 'game' | 'ending'
 type ResponseStage = {
   nodeId: string
   blocks: StoryBlock[]
+  /**
+   * 阅读序列标识（I01），形如 `response:${choiceId}:${下一稳定节点}`。
+   * 只用于让打字机识别「换了一段要重新播放的文本」，同样不进存档。
+   */
+  sequenceKey: string
   /** 选择前的状态快照，保证正文的条件文本在阅读回应时不会中途变化。 */
   snapshot: StoryState
 }
@@ -93,8 +100,25 @@ export default function App() {
   const [ending, setEnding] = useState<EndingStage | null>(boot.ending)
   const [dataError, setDataError] = useState<string | null>(null)
 
-  // 切换节点后把阅读区域滚回顶部。
+  /**
+   * 自动播放偏好（I01）。
+   *
+   * 属于用户偏好而不是剧情进度：存在独立的 localStorage key 里，
+   * 由应用层持有，因此节点切换、responseStage、重新初始化、通关重开都不会重置。
+   * 它不进入 StoryState，也不进 I03 存档。
+   */
+  const [autoplayEnabled, setAutoplayEnabled] = useAutoplayPreference()
+
+  /**
+   * 切换节点后把阅读区域滚回顶部。
+   *
+   * 显示选项专属回应时不滚：此时正文没有换，回应接在原文下面逐段显示，
+   * 拉回顶部反而会把刚出现的回应推出视野。回应结束、真正换到下一个稳定节点时，
+   * 这个 effect 会因为 responseStage 变回 null 再跑一次。
+   */
   useEffect(() => {
+    if (responseStage) return
+
     window.scrollTo({ top: 0 })
   }, [state.currentNodeId, responseStage])
 
@@ -209,7 +233,12 @@ export default function App() {
     // 有专属回应时先停留在原节点显示回应，玩家点击继续后才显示新节点。
     setResponseStage(
       result.response.length > 0
-        ? { nodeId: result.previousNodeId, blocks: result.response, snapshot: state }
+        ? {
+            nodeId: result.previousNodeId,
+            blocks: result.response,
+            sequenceKey: responseSequenceKey(choice.id, result.state.currentNodeId),
+            snapshot: state,
+          }
         : null,
     )
   }
@@ -289,6 +318,9 @@ export default function App() {
         // 状态面板始终读最新变量，即使正文停留在回应前的快照上。
         currentStats={state.stats}
         responseBlocks={responseStage?.blocks ?? null}
+        responseKey={responseStage?.sequenceKey ?? null}
+        autoplayEnabled={autoplayEnabled}
+        onAutoplayEnabledChange={setAutoplayEnabled}
         onChoose={handleChoose}
         onContinue={handleContinue}
       />

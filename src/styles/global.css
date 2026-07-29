@@ -83,6 +83,12 @@ ul {
   padding: 48px 20px 56px;
   display: flex;
   justify-content: center;
+  /*
+    .sr-only 是绝对定位的。没有已定位的祖先时它的包含块是初始包含块，
+    会绕过 GamePage 的 overflow 裁剪，把 document 撑高。
+    让每个 screen 自己成为包含块，隐藏文本层就永远留在页面内部。
+  */
+  position: relative;
 }
 
 .screen--start,
@@ -98,6 +104,19 @@ ul {
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--color-text-faint);
+}
+
+/* 只给屏幕阅读器：不占布局，但仍然在无障碍树里。 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .panel {
@@ -249,9 +268,42 @@ ul {
 
 /* ---------- GamePage ---------- */
 
+/*
+  固定舞台布局（I01 验收修订）。
+
+  GamePage 自己占满一屏并裁掉溢出，剩余高度全部交给剧情阅读区，
+  所以剧情再长也只在阅读区内部滚动，document 不会随 blocks 持续变高，
+  标题、状态面板和交互区也不会被推到页面下方。
+  这个限制只作用在 GamePage，StartPage / EndingPage / 错误页保持原来的页面滚动。
+
+  min-height: 0 是关键：flex 项的默认最小尺寸是内容高度，
+  不显式归零的话它会撑破容器，overflow 也就永远不会生效。
+*/
+.screen--game {
+  /*
+    必须是「确定高度」，不能只靠 flex: 1 + min-height: 0：
+    .app-shell 是高度 auto 的列向 flex 容器，会按内容的最大尺寸来量自己，
+    grow 项即使 flex-basis 为 0 也会把内容高度报上去，页面照样被撑高。
+  */
+  flex: none;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  /*
+    正常情况下这里不会滚动：剧情增长由内部阅读区吸收。
+    只有「状态面板 + 标题 + 四个选项」本身就装不下一屏时（窄且矮的手机），
+    才退化成这一层滚动，保证选项始终可达 —— 但舞台仍然只有一屏高，
+    document 不会随 blocks 变高，window 也始终不滚。
+  */
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 28px;
+}
+
 .game__layout {
   width: 100%;
   max-width: 1080px;
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;
   gap: 32px;
@@ -260,6 +312,9 @@ ul {
 
 .game__main {
   min-width: 0;
+  min-height: 0;
+  /* 状态面板保持内容高度，剧情列撑满整行。 */
+  align-self: stretch;
   max-width: var(--max-reading-width);
   display: flex;
   flex-direction: column;
@@ -276,10 +331,68 @@ ul {
   padding-bottom: 12px;
 }
 
+.game__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
 .game__progress {
   font-family: var(--font-mono);
   font-size: 0.75rem;
   color: var(--color-text-faint);
+}
+
+/*
+  自动播放开关。
+
+  在章节头部这一行，不在剧情滚动容器里，因此不会随正文滚走，
+  也不会挡住滚动条或选项。默认关闭，状态直接写成「开／关」，不用播放三角。
+*/
+.autoplay-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-faint);
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  line-height: 1.4;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.autoplay-toggle:hover {
+  border-color: rgba(157, 187, 255, 0.4);
+  color: var(--color-text-muted);
+}
+
+.autoplay-toggle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.autoplay-toggle__state {
+  min-width: 1.2em;
+  text-align: center;
+  color: var(--color-text-faint);
+}
+
+.autoplay-toggle[aria-pressed='true'] {
+  border-color: rgba(157, 187, 255, 0.45);
+  color: var(--color-text-muted);
+}
+
+.autoplay-toggle[aria-pressed='true'] .autoplay-toggle__state {
+  color: var(--color-accent);
 }
 
 .game__title {
@@ -288,10 +401,68 @@ ul {
   letter-spacing: 0.02em;
 }
 
+/*
+  剧情阅读区：唯一的滚动容器。
+
+  占满剧情列的剩余高度，内容超出后在自己内部出现纵向滚动条；
+  overscroll-behavior 阻止滚到头时把滚动传给页面。
+  min-height 保证极端情况下正文仍有一块可读区域。
+*/
 .game__text {
+  /* 逐字块里的 .sr-only 完整文本层跟着滚动内容走，不跑到容器外面。 */
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 8rem;
   display: flex;
   flex-direction: column;
   gap: 18px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  /* 阅读区域整体可点推进：不要 300ms 点击延迟，也不要双击缩放。 */
+  touch-action: manipulation;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+.game__text::-webkit-scrollbar {
+  width: 10px;
+}
+
+.game__text::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: rgba(148, 163, 184, 0.35);
+}
+
+.game__text::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, 0.55);
+}
+
+.game__text:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+/* 正文播放中的提示，安静、不抢正文；和选项互斥出现，所以不会叠加高度。 */
+.game__reading-hint {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: var(--color-text-faint);
+}
+
+/* 交互区在剧情滚动容器之外，不参与正文滚动，也不会盖住滚动条。 */
+.game__interactions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.game__interactions:empty {
+  display: none;
 }
 
 .game__choices {
@@ -323,6 +494,18 @@ ul {
 .block {
   /* 模板字符串里的换行保留为段内换行。 */
   white-space: pre-line;
+}
+
+/*
+  尚未揭示的内容（I01）。
+
+  仍然参与布局并保留完整高度与换行位置，所以逐字／逐条显示的过程中
+  不会出现布局抖动；visibility: hidden 同时把它挡在无障碍树和鼠标之外。
+  当前块显示完成后会回到普通单层渲染，不再有这一层。
+*/
+[data-pending='true'] {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .block--muted {
@@ -714,21 +897,45 @@ ul {
   }
 }
 
+/* 正文读完后，选项、继续按钮与分隔线的一次轻淡入：不缩放、不弹跳、不做长 stagger。 */
+.reading-reveal {
+  animation: reading-reveal 180ms ease both;
+}
+
+@keyframes reading-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* ---------- 响应式 ---------- */
 
 @media (max-width: 900px) {
+  /*
+    单列时改用 flex 列：状态面板保持内容高度，剧情列吃掉剩余高度。
+    grid 在这里更脆弱 —— 状态面板可以被隐藏（ui.hideStatusPanel），
+    行数会变，写死的 grid-template-rows 就会失效。
+  */
   .game__layout {
-    grid-template-columns: minmax(0, 1fr);
+    display: flex;
+    flex-direction: column;
     gap: 24px;
   }
 
   .game__main {
     max-width: none;
     order: 2;
+    flex: 1 1 auto;
   }
 
   .status {
     order: 1;
+    flex: none;
   }
 
   /* 单列布局下面板改成紧凑卡片：两列状态项，不抢首屏高度。 */
@@ -753,6 +960,24 @@ ul {
 @media (max-width: 768px) {
   .screen {
     padding: 32px 16px 44px;
+  }
+
+  /* 窄屏留给正文的高度本来就紧：底部不再多留白，主体间距也收一收。 */
+  .screen--game {
+    padding-bottom: 20px;
+  }
+
+  .game__layout {
+    gap: 16px;
+  }
+
+  .game__main {
+    gap: 14px;
+  }
+
+  /* 开关紧挨着大片推进热区，窄屏下把点击目标放大一点，减少误触。 */
+  .autoplay-toggle {
+    padding: 9px 12px;
   }
 
   .panel {

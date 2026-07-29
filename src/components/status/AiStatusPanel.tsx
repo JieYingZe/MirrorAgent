@@ -28,6 +28,8 @@ export function AiStatusPanel({ stats, mode }: AiStatusPanelProps) {
       className="panel status"
       data-mode={mode ?? 'normal'}
       aria-label={statusPanelContent.ariaLabel}
+      // 面板整体不参与阅读推进：点状态面板不该快进正文（I01）。
+      data-no-story-advance="true"
     >
       <h2 className="status__title">{statusPanelContent.title}</h2>
 

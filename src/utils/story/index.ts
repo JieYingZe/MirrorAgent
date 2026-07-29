@@ -25,3 +25,57 @@ export {
 export type { StorySaveLoadResult, StorySaveValidation } from './storySave'
 export { getChapterPhaseLabel, getChapterProgressLabel } from './chapterLabels'
 export { describeNodeIssue } from './nodeIssue'
+
+/* 阅读节奏（I01）：只影响展示层，不进入 StoryState，也不写存档。 */
+export {
+  hasText,
+  formatEntryValue,
+  getSystemUnits,
+  getRecordUnits,
+  getMessageUnits,
+  getDocumentUnits,
+  getBlockUnitTotal,
+  isBlockEmpty,
+} from './readingUnits'
+export type {
+  SystemUnits,
+  RecordUnits,
+  MessageUnits,
+  DocumentUnits,
+  DocumentSectionUnits,
+} from './readingUnits'
+export {
+  READING_TIMING,
+  resolveCharBaseMs,
+  resolveInterBlockDelay,
+  buildRevealSteps,
+  buildBlockRevealPlan,
+  buildSequencePlan,
+} from './readingPlan'
+export type { RevealStep, BlockRevealMode, BlockRevealPlan, SequencePlan } from './readingPlan'
+export {
+  nodeSequenceKey,
+  responseSequenceKey,
+  getSequenceStage,
+  createReadingSequenceState,
+  syncReadingSequence,
+  tickReadingSequence,
+  skipCurrentBlock,
+  advanceToNextBlock,
+  completeSequence,
+  applyReadingInput,
+  resolveReadingTick,
+  getReadingPhase,
+  getCompletedBlockCount,
+  getGraphemeProgress,
+  getUnitProgress,
+} from './readingSequence'
+export type {
+  ReadingStage,
+  ReadingPhase,
+  ReadingOptions,
+  ReadingSequenceState,
+  ReadingInputAction,
+  ReadingInputResult,
+  ReadingTick,
+} from './readingSequence'
