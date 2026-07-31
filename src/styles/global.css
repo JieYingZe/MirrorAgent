@@ -476,6 +476,105 @@ img {
   padding-top: 2px;
 }
 
+/* ---------- 启动遮罩与音频控件（A01） ---------- */
+
+/*
+  启动遮罩。
+
+  盖住整个视口，比业务层高一层，是页面加载后唯一可操作的东西。
+  不做重设计：一个标题、一个按钮、一句提示，点完就消失。
+  背景几乎不透明 —— 让它像「实验尚未开始」的黑场，而不是一层浮在页面上的弹窗。
+*/
+.startup-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px max(20px, env(safe-area-inset-right)) 32px max(20px, env(safe-area-inset-left));
+  background-color: rgba(4, 6, 10, 0.97);
+  animation: fade-in var(--transition-normal) ease both;
+}
+
+.startup-gate__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30px;
+  text-align: center;
+}
+
+.startup-gate__title {
+  font-size: clamp(1.5rem, 6vw, 2.4rem);
+  font-weight: 600;
+  /* 字距会在最后一个字母后也留出空隙；补一个 text-indent 把整块拉回视觉居中。 */
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  line-height: 1.2;
+}
+
+.startup-gate__action {
+  min-width: 240px;
+}
+
+.startup-gate__hint {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  letter-spacing: var(--letter-spacing-label);
+  color: var(--color-text-faint);
+}
+
+/*
+  全局静音／恢复声音。
+
+  由 App 渲染一次并固定在右上角：StartPage、GamePage、EndingPage 上位置完全一致，
+  不随页面结构变化跳动。它在剧情舞台之外，点击不会冒泡到 GamePage 的阅读推进热区。
+
+  只有图标，可见文字为零，名称完全由 aria-label 承担。
+*/
+.audio-toggle {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background-color: rgba(10, 14, 21, 0.72);
+  color: var(--color-text-faint);
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.audio-toggle:hover {
+  border-color: rgba(157, 187, 255, 0.4);
+  color: var(--color-text-muted);
+}
+
+.audio-toggle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+/* 静音是一个「正在生效的限制」，给它一点提示色，扫一眼就能看出来。 */
+.audio-toggle[aria-pressed='true'] {
+  border-color: rgba(216, 181, 109, 0.45);
+  color: var(--color-warning);
+}
+
+.audio-toggle__icon {
+  flex: none;
+}
+
 /* ---------- StartPage ---------- */
 
 /*
@@ -1347,6 +1446,22 @@ img {
   .status__item dd {
     text-align: left;
   }
+
+  /*
+    给右上角的声音开关让位（A01）。
+
+    只有单列布局需要：两列时剧情列被 --max-reading-width 卡在 720px，
+    右边缘离视口右上角还有一大截，开关落在空白里什么都不挡。
+    单列后章节头铺满舞台，进度与自动播放开关就会顶到声音开关下面。
+    52px = 开关 44 + 视口边距 12 之外再留一点余量。
+
+    让位只给真正落在开关下面的那一行。状态面板不整卡收内边距：
+    那会连带压窄下面的状态项网格，320px 下有两组文字会折行，
+    面板高度涨 18px，直接从本来就不多的正文高度里扣（I01 的固定舞台）。
+  */
+  .game__header {
+    padding-right: 52px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -1386,6 +1501,12 @@ img {
 
   .game__main {
     gap: 12px;
+  }
+
+  /* 触摸目标补到 44px（docs/03 §10）；位置与桌面一致，仍在右上角。 */
+  .audio-toggle {
+    width: 44px;
+    height: 44px;
   }
 
   /*
@@ -1460,6 +1581,15 @@ img {
     justify-content: space-between;
     padding: 12px 16px;
     gap: 8px 12px;
+  }
+
+  /*
+    横向状态带里唯一可能贴到右上角的是提示语（order: 2，与标题同一行时靠右）。
+    只让它自己收一格，状态项那一行仍然是满宽，不会被挤到折行。
+    提示语被挤到第二行时这段内边距只是尾部留白，不产生任何影响。
+  */
+  .status__hint {
+    padding-right: 52px;
   }
 
   .status__hint {

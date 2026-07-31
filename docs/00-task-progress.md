@@ -24,8 +24,8 @@
 | 交互体验 | I01 | 打字机效果与阅读节奏 | `useStoryReadingSequence` + `utils/story/reading*` | P1 | 已完成 | 文本逐字显示，可点击跳过当前段 | 统一阅读状态机 + 固定高度剧情阅读区 + 自动播放开关。已做两次验收修订：①剧情区改为受控高度的独立滚动容器、自动跟随只滚容器不滚页面；②自动播放默认关闭并交给独立的本地用户偏好，开关关闭时立即补全当前 block 并停住，开启时一次点击看完当前展示序列，推进热区扩大到舞台空白。详见下方“I01 说明”。没有实现 `TypewriterText` 组件：揭示是整段序列的状态，不是单个文本组件的私有状态 |
 | 交互体验 | I02 | AI 状态面板 | `AiStatusPanel` | P1 | 已完成 | 不直接显示数字，而显示状态描述 | 四变量经 `src/utils/aiStatus.ts` 的纯映射转成状态文案（语气／反馈／权限／自我边界，每个变量五档），区间与结局阈值对齐、首末档向 ±∞ 开放，NaN 与缺字段回落到初始档；面板只展示，不写回 `StoryState`。GamePage 传入最新 `stats`，因此显示选项专属回应时也会立即更新，并尊重节点的 `ui.hideStatusPanel` 与 `ui.mode: 'control'`（仅边框与提示语变化）。桌面 280px 右栏、≤900px 两列紧凑卡片，320px 无换行无横向滚动。`tests/aiStatus.test.ts` 18 个用例覆盖区间边界、初始值、剧情实际取值范围与 ±1000／±Infinity |
 | 交互体验 | I03 | 本地存档 | localStorage | P1 | 已完成 | 刷新后可继续，结局后可重开 | 存档键 `mirror-agent:story-save`，直接持久化正式 `StoryState`（见下方“I03 说明”）。`src/utils/story/storySave.ts` 提供 load / save / clear / validate，恢复前逐字段校验并复用正式剧情索引；损坏、旧版本、引用失效的存档安全清除后按无存档处理，localStorage 不可用时静默降级为不保存。存档只处理剧情状态，音频偏好仍属 A01 且必须使用独立键 |
-| 音频体验 | A01 | 启动遮罩与音频管理 | `StartupGate` 覆盖层、全局音频管理 | P1 | 未开始 | 详见下方“A01 验收标准” | 依赖 P03；流程以 `docs/03-interaction-design.md` §2 为准 |
-| 音频体验 | A02 | BGM 场景映射与切换 | BGM 场景映射与切换逻辑 | P1 | 未开始 | 详见下方“A02 验收标准” | 依赖 A01；映射与切换边界见 `docs/05-assets-map.md` §6 |
+| 音频体验 | A01 | 启动遮罩与音频管理 | `StartupGate` 覆盖层、全局音频管理 | P1 | 已完成 | 详见下方“A01 验收标准” | 应用级 `StartupGate` + `inert` 业务层 + 固定右上角静音按钮；音频状态所有者只有一个（`utils/audio/bgmPlayer.ts`）。用户偏好升级到 v2，加入 `muted` / `masterVolume`，写入口合并为 `useUserPreferences`。详见下方“A01 / A02 说明” |
+| 音频体验 | A02 | BGM 场景映射与切换 | BGM 场景映射与切换逻辑 | P1 | 已完成 | 详见下方“A02 验收标准” | 场景解析集中在 `utils/audio/bgmScene.ts`（纯函数），资源与音量集中在 `data/audioTracks.ts`；`manifest.ts` 保持不变。实测一次完整通关只创建 5 个 Audio 实例、只换 4 次曲。详见下方“A01 / A02 说明” |
 | 音频体验 | A03 | SFX 接入与音量平衡 | 音效触发与音量策略 | P2 | 未开始 | 详见下方“A03 验收标准” | 依赖 A01；时间不足时可延后，不阻塞通关 |
 | 视觉实现 | V01 | 全局视觉风格 | `src/styles/global.css` | P1 | 已完成 | 暗色、安静、AI 终端感、可读性好 | 变量分组重排、字体层级、面板与按钮底色、开始页成稿构图、结局页仪式感、状态面板移动端压缩、1024px 拥挤修复。正文桌面 17px／移动 16px，实测对比度全部 ≥ 4.5:1。视觉规范见 `docs/04-ui-visual-spec.md` |
 | 视觉实现 | V02 | 页面背景与插画接入 | 背景图、渐变、遮罩 | P1 | 已完成 | 每章有氛围区分且风格统一 | 七个视觉场景（start / prologue / 第一至第五章-结局）。场景解析集中在 `utils/visualScene.ts` + `data/visualScenes.ts`，背景层组件 `components/visual/SceneBackground.tsx`。只在场景键变化时换图，一次完整通关恰好 7 次图片请求、7 个唯一 URL。`bg-start` 是开始页成稿，`contain` 完整显示；序章用独立的 `bg-prologue`。资源映射见 `docs/05-assets-map.md` §3 |
@@ -122,8 +122,8 @@ GamePage 增加自动播放开关；关闭开关时立即补全当前 block 并�
 |---|---|
 | `src/utils/graphemes.ts` | Unicode 字素分割，优先 `Intl.Segmenter`，另有回退实现 |
 | `src/utils/readingScroll.ts` | 剧情容器内部滚动的纯几何计算 |
-| `src/utils/userPreferences.ts` | 本地用户偏好（目前只有 `autoplayEnabled`），独立 key、独立容错 |
-| `src/hooks/useAutoplayPreference.ts` | 应用级持有自动播放偏好并即时持久化 |
+| `src/utils/userPreferences.ts` | 本地用户偏好，独立 key、独立容错（A01 起还包含音频字段） |
+| `src/hooks/useUserPreferences.ts` | 应用级持有偏好并即时持久化（A01 由 `useAutoplayPreference` 合并而来） |
 | `src/components/story/AutoplayToggle.tsx` | 自动播放开关（原生 button + `aria-pressed`） |
 | `src/utils/story/readingUnits.ts` | 面板类块的语义单元划分与「空块」判定，渲染与揭示计划共用 |
 | `src/utils/story/readingPlan.ts` | 速度、标点停顿、段间停顿、揭示步骤、单块时长上限 |
@@ -201,10 +201,13 @@ GamePage 增加自动播放开关；关闭开关时立即补全当前 block 并�
 
 ### 自动播放偏好（独立于 I03 存档）
 
-存储键 `mirror-agent:user-preferences`，结构 `{ version: 1, autoplayEnabled: boolean }`，
-默认 `false`。由 `App` 通过 `useAutoplayPreference` 持有，所以节点切换、responseStage、
-`sequenceKey` 变化都不会重置它；刷新、关闭浏览器、重新初始化、通关重开都保持。
-EndingPage 不显示开关。
+存储键 `mirror-agent:user-preferences`，I01 阶段的结构是 `{ version: 1, autoplayEnabled: boolean }`，
+默认 `false`。由 `App` 持有，所以节点切换、responseStage、`sequenceKey` 变化都不会重置它；
+刷新、关闭浏览器、重新初始化、通关重开都保持。EndingPage 不显示开关。
+
+A01 把这份偏好升级到 `version: 2` 并加入 `muted` / `masterVolume`，同时把写入口合并为
+`useUserPreferences`（原 `useAutoplayPreference` 已删除）。旧的 v1 偏好会原样保留
+`autoplayEnabled`，只是补上音频字段的默认值，见下方“A01 / A02 说明”。
 
 偏好与 I03 完全分离：不同的 key、不同的模块、互不读写。偏好不进入 `StoryState`、
 不进 save schema、不进 `choiceHistory` / `responseStage` / 节点数据 / 剧情验证。
@@ -298,6 +301,165 @@ response 自动播完停在「继续」，点击只完成 response 不跨节点�
 未能在本环境验收的项：浏览器面板处于隐藏状态时不合成帧，`scroll` 事件与平滑滚动动画都不会触发，
 因此「玩家主动向上滚动后不被拉回、滚回底部后恢复跟随」只能靠代码与纯函数测试
 （`tests/readingScroll.test.ts` 覆盖最小滚动量与可见性判定）保证，需要在真实浏览器里再人工确认一次。
+
+---
+
+## A01 / A02 音频说明
+
+只覆盖 A01 与 A02，没有接入任何 SFX（A03 仍然未开始）。
+没有改动剧情文本、剧情变量、结局规则和视觉场景逻辑；`manifest.ts` 一个字没动。
+
+四首 BGM 的轨道增益已按人工试听结果分别调校，详见 `src/data/audioTracks.ts` 的 `gain` 与
+`tests/bgmScene.test.ts` 的“音量配置”一节；播放架构与场景映射不因音量调整而变化。
+
+### 结构
+
+| 文件 | 职责 |
+|---|---|
+| `src/types/audio.ts` | `BgmTrackKey` / `AudioSurface` / `BgmScene` / `BgmTrack` |
+| `src/utils/audio/audioPaths.ts` | 公开资源路径拼接（纯函数 + 读 `import.meta.env.BASE_URL`） |
+| `src/data/audioTracks.ts` | 唯一维护音频文件路径与音量的地方（曲目增益、主音量默认值、淡变时长） |
+| `src/utils/audio/bgmScene.ts` | 场景 → 曲目的纯函数解析，含章节表与节点级覆盖表 |
+| `src/utils/audio/bgmPlayer.ts` | 全局唯一的音频状态所有者（实例、淡入淡出、页面隐藏、失败降级） |
+| `src/hooks/useBgmPlayer.ts` | 把播放器接到 React 生命周期；应用层只调用一次 |
+| `src/hooks/useUserPreferences.ts` | 全项目唯一的偏好写入口（自动播放 + 音频） |
+| `src/components/audio/StartupGate.tsx` | 启动遮罩 |
+| `src/components/audio/MuteToggle.tsx` | 固定右上角的全局静音／恢复声音按钮 |
+
+`App` 只做三件事：声明当前音频场景、持有偏好、在「点击进入实验」里调一次 `unlock()`。
+StartPage / GamePage / EndingPage 完全不认识音频，也不持有任何 Audio 实例。
+
+### A01 启动遮罩、静音与偏好
+
+- 每次页面加载先显示 `StartupGate`（`MIRROR AGENT` / 点击进入实验 / 建议佩戴耳机）。
+  业务层在遮罩显示期间加 `inert`：下面的按钮点不到、Tab 不到、屏幕阅读器也读不到，
+  遮罩本身是 `role="dialog" aria-modal="true"` 并自动聚焦到按钮。
+- 「点击进入实验」在这次点击的调用栈里调用 `unlock()`（浏览器的自动播放策略认的是用户手势），
+  然后**无条件**关闭遮罩：解锁失败、文件 404、解码失败、被浏览器拒绝都不弹窗、不显示错误页，
+  只在控制台 `warn` 一次并静默降级为无声。
+- 「点击进入实验」与 StartPage 的「开始初始化／继续实验」是两个独立动作，遮罩不读写剧情存档。
+- 静音按钮由 `App` 渲染一次、`position: fixed` 在右上角，因此三个页面上位置完全一致；
+  原生 `button` + `aria-pressed` + 明确 `aria-label`（「声音：已开启，点击静音」／
+  「声音：已静音，点击恢复声音」），键盘可用并保留 focus-visible。
+  它在剧情舞台之外，点击不会冒泡到 GamePage 的阅读推进热区。
+- 静音立即停止并释放实例（不淡出、不保留播放位置）；恢复声音时按**当前场景**新建实例淡入。
+- 偏好升级到 `version: 2`：`{ autoplayEnabled, muted, masterVolume }`。
+  版本策略是「`version` 只记录写入时的结构，读取一律逐字段校验后与默认值合并」，
+  所以 v1 偏好的升级结果就是「保留 autoplayEnabled + 音频取默认值」，不需要一串 migrate 函数；
+  版本号更高或缺失时同样按字段回收，不整份判死。`masterVolume` 只接受有限数字并夹到 0–1。
+- 写入口只有一个。原来的 `useAutoplayPreference` 直接写 `{ version, autoplayEnabled }`，
+  加音频字段后会在切换自动播放时抹掉静音状态，因此合并成 `useUserPreferences`：
+  每次都基于最新的完整偏好打补丁再整份写回，两类偏好互不覆盖（两个方向都有测试）。
+- 重新初始化只调 `clearStorySave()`，不碰偏好键；音频失败不影响剧情、选择、存档、结局与重新初始化。
+
+### A02 BGM 场景与切换
+
+映射集中在 `bgmScene.ts`，剧情页的输入只有节点 ID 与章节 ID：
+
+| 场景 | 曲目 |
+|---|---|
+| StartupGate 点击进入实验 / StartPage | `main_theme` |
+| `prologue.*` | `main_theme`（章节默认，与开始页同一首，不重启） |
+| `chapter_1` / `chapter_2` / `chapter_3` | `game_ambient` |
+| `chapter_4` | `control_mode` |
+| `chapter_5` 默认（前半） | `game_ambient` |
+| `ch5.final_record` / `ch5.final_confirmation` / `ch5.ending_gate` | `ending`（节点级覆盖） |
+| EndingPage | `ending`（与第五章后半同一个实例） |
+| 数据错误页 | 无（静默） |
+
+- **为什么不用 manifest 的 `musicKey`**：第五章要在章内换歌，章节级字段表达不了这个边界，
+  而剧情数据里没有节点级音乐字段。按 `docs/05-assets-map.md` §6.3 的第一种方案，
+  在音频层单独维护一张表，`manifest.ts` 保持不变，避免两处半对半错。
+  章节覆盖完整性、节点覆盖表的 ID 有效性由 `tests/bgmScene.test.ts` 对着 manifest 与剧情索引校验。
+- **边界写成显式节点 ID**，不用「第 N 个节点之后」：节点顺序会随内容调整，显式 ID 改错会被测试立刻发现。
+- **BGM 跟的是「正在显示的节点」而不是已提交的 `currentNodeId`**：
+  显示选项专属回应期间画面还停在选择前那个节点，音乐也跟着画面走，点继续后才换曲。
+
+### 播放行为与状态转换
+
+播放器只有一个收敛点 `apply()`，每次 `sync` / `unlock` / `visibilitychange` 之后跑一遍，
+结果只取决于当前状态，与「怎么走到这一步」无关，因此快速连续输入不会互相污染：
+
+| 当前状态 | 行为 |
+|---|---|
+| 未解锁 或 静音 或 场景无曲目 | 立即停止并释放实例，不留淡出尾巴 |
+| 页面隐藏 | 只暂停，不新建、不换曲、不销毁；恢复可见时再按最新状态对齐 |
+| 曲目键与当前实例相同 | 什么都不做（不 `new Audio`、不改 src、不 `load`、不重置 `currentTime`），只补音量并确保在播 |
+| 曲目键不同 | 旧实例淡出、新实例淡入，600ms 交叉，之后旧实例被释放 |
+
+- 同一时刻最多两个实例（在播的一首 + 正在淡出的一首）；上一首还没淡完就又换曲时，
+  旧的直接停掉，不排队堆积。
+- `play()` 既可能同步抛错也可能返回被拒绝的 Promise，两种都当作「这一首放不了」处理；
+  回调里先确认这个实例仍然是当前实例，迟到的失败回调不会把新状态改回去。
+- 不保存播放位置：静音、换曲、刷新都从头开始；只有「页面隐藏 → 恢复」是暂停续播。
+- 音量集中在 `data/audioTracks.ts`：最终音量 = `masterVolume`(默认 0.5) × 曲目 `gain`(0.812–1.4)，
+  默认主音量下的生效值在 0.4–0.7 之间，四首各自独立调校，不是靠一个全局主音量拉齐。
+- 路径用 `import.meta.env.BASE_URL` 拼接，适配 GitHub Pages 子路径部署。
+- Strict Mode：播放器实例在 effect 里创建、在 cleanup 里 `dispose()`，
+  状态全部由外部声明式传入，卸载重建后新实例会被重新 sync 成一样的状态，不遗留实例。
+  实测一次完整通关恰好创建 5 个实例（1 首起始 + 4 次换曲），没有多余实例。
+
+### 布局
+
+静音按钮固定在右上角。两列布局下剧情列被 `--max-reading-width` 卡在 720px，
+右边缘离视口右上角还有一大截，开关落在空白里什么都不挡；
+≤900px 单列后章节头铺满舞台，才需要 `.game__header { padding-right: 52px }` 让位。
+状态面板**不**整卡收内边距 —— 那会压窄下面的状态项网格，320px 下有两组文字折行、
+面板高度涨 18px，直接从本来就不多的正文高度里扣（I01 的固定舞台）；
+只给真正会贴到右上角的 `.status__hint` 收一格。
+
+### 验证结果
+
+| 命令 | 结果 |
+|---|---|
+| `npx tsc -b` | 通过 |
+| `npm test`（vitest，245 个用例，其中 A01/A02 相关 76 个） | 通过 |
+| `npm run validate:story` | 通过，0 error / 0 warning |
+| `npm run build` | 通过 |
+
+新增测试：`tests/bgmScene.test.ts`（36 个）覆盖页面级映射、docs §6.2 的七个边界节点、
+同章／跨章不换曲、第四章分支与汇流一致、第五章前后半分界、一次完整通关只换 4 次曲、
+映射表对着 manifest 与剧情索引的完整性、四个曲目文件互不相同、GitHub Pages 子路径拼接；
+`tests/userPreferences.test.ts` 扩到 40 个，新增 v1→v2 升级、缺 version、未来版本号、
+音量校验与夹取、两类偏好互不覆盖、清空剧情存档不动音频偏好。
+
+浏览器实测（1280 / 1180 / 900 / 768 / 520 / 320 宽）：
+首次进入显示遮罩、业务层 `inert` 且背景按钮无法获得焦点、遮罩按钮自动聚焦；
+点击进入实验后遮罩关闭、`inert` 解除、静音按钮出现、主旋律淡入到 0.31；
+把 `public/audio/bgm` 整个改名制造 404 后重进：遮罩照常关闭、StartPage 正常、
+无阻断弹窗、无错误页，序章到第一章正常游玩并正确记录选择与变量，控制台只有一条我们自己的 warn；
+静音立即停止（0 个实例在播）并写入偏好，恢复声音按当前场景新建实例；
+静音状态下点击进入实验不创建任何 Audio 实例；
+连续 6 次快速静音／恢复全程最多 1 个实例在播、结束时恰好 1 个；
+10 次快速隐藏／恢复叠加 8 次静音／恢复后仍然只有 1 个实例在播、音量正确；
+页面隐藏时暂停且进度冻结，恢复后同一实例续播、不新建实例；
+一次完整通关的换曲点实测为 `prologue.initialization` → main_theme、
+`ch1.three_lists` → ambient、`ch4.protection_protocol` → control、
+`ch5.permanent_request` → ambient、`ch5.final_record` → ending，
+第二、三章与第五章前半零新建实例，结局页仍在播 `ch5.final_record` 创建的那一个实例；
+交叉重叠只出现在换曲的约 600ms 内，最多 2 个实例同时有声；
+GamePage 上点静音按钮不推进剧情（节点、块数、正文长度均不变）；
+自动播放开关与静音互不覆盖（先静音再开自动播放，两者都保留）；
+刷新后两类偏好都保留、遮罩重新出现、存档仍可继续；
+结局页「重新初始化」后剧情存档回到序章而偏好一字未变；
+320px 下遮罩、开始页（含成稿失败兜底）、剧情页、结局页都没有文字或控件被按钮遮挡，
+按钮 44×44、无横向滚动；控制台无错误、无 React 警告。
+
+### 仍需人工确认的限制
+
+- **没有听觉验收**。本环境只能读 `HTMLAudioElement` 的 `paused` / `volume` / `currentTime`，
+  无法确认淡入淡出听起来是否自然。`gain` 已按人工试听结果调校，但仍建议戴耳机在真实设备上
+  再走一遍通关确认，需要时继续微调 `data/audioTracks.ts`。
+- **没有截图**。浏览器面板处于隐藏状态、不合成帧，截图接口不可用，
+  遮罩与静音按钮的视觉效果全部靠几何测量（元素矩形、文字 Range、有无重叠、有无横向滚动）确认，
+  实际观感需要人工看一眼。
+- **页面隐藏是模拟的**。同样因为面板不显示，`document.hidden` 恒为 true，
+  测试时改写了 `document.hidden` / `visibilityState` 并手动派发 `visibilitychange`。
+  真实切标签页的行为需要再确认一次（尤其是移动端浏览器切后台时的自动暂停）。
+- **只在 Chromium 上验证过**。Safari 的自动播放策略更严格，iOS 上还有静音开关的影响，
+  需要在真机上确认「点击进入实验」是否真的能解锁。
+- EndingPage 在 320px 下有 2px 横向溢出，来自开发验证区的 `dev-summary__mono`，
+  与音频无关，去掉开发验证区时会一并消失。
 
 ---
 

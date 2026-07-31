@@ -4,6 +4,29 @@
  * 剧情节点、文本块和选项一律来自 src/data/story/，不放在这里。
  */
 
+/**
+ * 启动遮罩（A01）。
+ *
+ * 三行文案由 docs/05-assets-map.md §8 与 docs/03-interaction-design.md §3.1 规定，
+ * 不要在这里加第四行说明：遮罩只承担「一次用户手势」这一件事。
+ */
+export const startupGateContent = {
+  title: 'MIRROR AGENT',
+  action: '点击进入实验',
+  hint: '建议佩戴耳机',
+}
+
+/**
+ * 全局音频控件（A01）。
+ *
+ * 按钮只有图标，可见文字为零，因此 aria-label 必须把「当前状态 + 点击后会发生什么」
+ * 都说清楚，不能只写「静音」。
+ */
+export const audioContent = {
+  muteAriaSoundOn: '声音：已开启，点击静音',
+  muteAriaSoundOff: '声音：已静音，点击恢复声音',
+}
+
 export const startContent = {
   titleEn: 'MIRROR AGENT',
   titleZh: '镜中代理',

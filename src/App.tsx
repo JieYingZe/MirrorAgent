@@ -12,6 +12,7 @@ import type {
   StoryState,
 } from './types/story'
 import type { SceneImageStatus, SceneSurface } from './types/visual'
+import type { BgmScene } from './types/audio'
 import type { EndingResolution } from './utils/story'
 import {
   advanceToNext,
@@ -28,8 +29,12 @@ import {
   saveStorySave,
 } from './utils/story'
 import { resolveSceneKey } from './utils/visualScene'
-import { useAutoplayPreference } from './hooks/useAutoplayPreference'
+import { resolveBgmTrack } from './utils/audio/bgmScene'
+import { useUserPreferences } from './hooks/useUserPreferences'
+import { useBgmPlayer } from './hooks/useBgmPlayer'
 import { SceneBackground } from './components/visual/SceneBackground'
+import { StartupGate } from './components/audio/StartupGate'
+import { MuteToggle } from './components/audio/MuteToggle'
 
 type Screen = 'start' | 'game' | 'ending'
 
@@ -131,13 +136,22 @@ export default function App() {
   const [sceneImageStatus, setSceneImageStatus] = useState<SceneImageStatus>('loading')
 
   /**
-   * 自动播放偏好（I01）。
+   * 本地用户偏好（I01 自动播放 + A01 音频）。
    *
    * 属于用户偏好而不是剧情进度：存在独立的 localStorage key 里，
    * 由应用层持有，因此节点切换、responseStage、重新初始化、通关重开都不会重置。
    * 它不进入 StoryState，也不进 I03 存档。
    */
-  const [autoplayEnabled, setAutoplayEnabled] = useAutoplayPreference()
+  const [preferences, updatePreferences] = useUserPreferences()
+
+  /**
+   * 启动遮罩与音频解锁（A01）。
+   *
+   * 两个状态都只属于这一次页面加载，不持久化：遮罩每次打开网页出现一次，
+   * 解锁标记也随刷新失效（浏览器的自动播放许可同样不跨页面加载保留）。
+   */
+  const [gateOpen, setGateOpen] = useState(true)
+  const [audioUnlocked, setAudioUnlocked] = useState(false)
 
   /**
    * 切换节点后把阅读区域滚回顶部。
@@ -207,7 +221,9 @@ export default function App() {
    *
    * 先清除旧剧情存档，再建立全新初始状态并直接进入序章；
    * 清除或保存失败时，内存中的重新初始化仍然成功。
-   * 只处理剧情存档，不涉及音频偏好（音频偏好属于 A01，使用独立存储键）。
+   *
+   * 只清剧情存档。自动播放与音频偏好在另一个存储键里，由 useUserPreferences 持有，
+   * 这里既不读也不写，因此重新初始化不会把静音状态或音量改回默认值。
    */
   function handleStartNewRun() {
     clearStorySave()
@@ -386,8 +402,8 @@ export default function App() {
             currentStats={state.stats}
             responseBlocks={responseStage?.blocks ?? null}
             responseKey={responseStage?.sequenceKey ?? null}
-            autoplayEnabled={autoplayEnabled}
-            onAutoplayEnabledChange={setAutoplayEnabled}
+            autoplayEnabled={preferences.autoplayEnabled}
+            onAutoplayEnabledChange={(next) => updatePreferences({ autoplayEnabled: next })}
             onChoose={handleChoose}
             onContinue={handleContinue}
           />
@@ -410,14 +426,73 @@ export default function App() {
     view.surface === 'game' ? view.chapter.backgroundKey : undefined,
   )
 
+  /*
+    当前音频场景（A02）。
+
+    与背景层是两个独立的输入：背景只认章节的 backgroundKey，
+    BGM 还需要节点 ID —— 第五章要在章内换歌，章节级信息定位不到那个边界。
+
+    用的是「正在显示的节点」而不是已提交的 currentNodeId：显示选项专属回应期间，
+    画面仍停在选择前那个节点，音乐也应该跟着画面走，等玩家点继续、真正进入
+    下一个节点时再换曲。resolveBgmTrack 是纯函数，页面组件不参与任何节点判断。
+  */
+  const audioScene: BgmScene =
+    view.surface === 'game'
+      ? { surface: 'game', nodeId: view.node.id, chapterId: view.node.chapterId }
+      : { surface: view.surface }
+
+  /*
+    全局唯一的音频状态所有者（A01）。
+
+    只声明「现在该响哪一首、静音没有、解锁没有」，实例创建、淡入淡出、
+    页面隐藏与播放失败降级全部在音频层内部完成。
+  */
+  const { unlock } = useBgmPlayer({
+    track: resolveBgmTrack(audioScene),
+    muted: preferences.muted,
+    masterVolume: preferences.masterVolume,
+    unlocked: audioUnlocked,
+  })
+
+  /**
+   * 「点击进入实验」（A01）。
+   *
+   * 解锁必须发生在这次点击的调用栈里：浏览器的自动播放策略认的是用户手势。
+   * 解锁失败、文件加载不出来、被浏览器拒绝都不会抛错，遮罩一律关闭，
+   * 之后整个游戏照常可玩，只是没有声音。
+   *
+   * 与 StartPage 的「开始初始化／继续实验」是两个独立动作：这里不碰剧情存档。
+   */
+  function handleEnterExperiment() {
+    unlock()
+    setAudioUnlocked(true)
+    setGateOpen(false)
+  }
+
   return (
-    <div className="app-shell">
-      <SceneBackground
-        sceneKey={sceneKey}
-        surface={surface}
-        onImageStatusChange={setSceneImageStatus}
-      />
-      {renderScreen(view)}
-    </div>
+    <>
+      {/*
+        遮罩显示期间用 inert 关掉整个业务层：下面的按钮既点不到也 Tab 不到，
+        屏幕阅读器同样读不到，遮罩才真的是模态的。
+      */}
+      <div className="app-shell" inert={gateOpen}>
+        <SceneBackground
+          sceneKey={sceneKey}
+          surface={surface}
+          onImageStatusChange={setSceneImageStatus}
+        />
+        {renderScreen(view)}
+
+        {/* 固定在右上角，因此三个页面上的位置完全一致，不随页面结构跳动。 */}
+        {!gateOpen && (
+          <MuteToggle
+            muted={preferences.muted}
+            onMutedChange={(next) => updatePreferences({ muted: next })}
+          />
+        )}
+      </div>
+
+      {gateOpen && <StartupGate onEnter={handleEnterExperiment} />}
+    </>
   )
 }

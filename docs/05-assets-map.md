@@ -205,14 +205,20 @@ ch5.ending_gate → EndingPage → bgm-ending（不切歌）
 
 ### 6.3 与 manifest 的关系
 
-`src/data/story/manifest.ts` 目前只有章节级的 `musicKey`，且第五章整章标记为 `ending_theme`，与上面的“第五章前半 / 后半”边界不一致。
+`src/data/story/manifest.ts` 只有章节级的 `musicKey`，且第五章整章标记为 `ending_theme`，与上面的“第五章前半 / 后半”边界不一致。
 
-当前数据结构没有节点级的音乐字段，因此本节只是建议映射。A02 实现时需要先决定采取哪一种方式：
+A02 已经采用第一种方案：**在音频层单独维护映射，`manifest.ts` 保持不变，不新增节点级音乐字段。**
+运行时不读 `musicKey`，请不要以它为准。
 
-- 在音频层单独维护一张“节点 ID → BGM”覆盖表，manifest 保持不变；
-- 或者为 `StoryNode` 增加可选的音乐字段，并同步更新 `manifest.ts` 与验证脚本。
+```txt
+src/types/audio.ts             曲目键、场景与曲目类型
+src/utils/audio/bgmScene.ts    唯一维护「章节 → 曲目」与「节点 → 曲目」覆盖的地方
+src/data/audioTracks.ts        唯一维护音频路径与音量的地方
+src/utils/audio/bgmPlayer.ts   全局唯一的音频状态所有者
+```
 
-在做出决定并实现以前，不要以 manifest 的 `musicKey` 为准。
+章节覆盖是否完整、节点覆盖表引用的 ID 是否仍然存在，由 `tests/bgmScene.test.ts`
+对着 `storyManifest` 与剧情节点索引校验，不需要改 `scripts/validate-story.ts`。
 
 BGM 应保持低存在感，服务于阅读氛围，不应盖过剧情文本。
 
