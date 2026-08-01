@@ -17,14 +17,30 @@ export const startupGateContent = {
 }
 
 /**
- * 全局音频控件（A01）。
+ * 全局音频控件（A01 建立，A03 试玩修订拆成两个通道）。
  *
- * 按钮只有图标，可见文字为零，因此 aria-label 必须把「当前状态 + 点击后会发生什么」
- * 都说清楚，不能只写「静音」。
+ * 原来只有一个静音按钮，玩家要么全有声要么全无声。实际试玩里这两类声音的取舍
+ * 是独立的，因此拆成「背景音乐」和「音效」两个开关，不再保留第三个总开关。
+ *
+ * 按钮上有可见的通道名与开／关状态，状态不只靠图标表达；
+ * aria-label 与 title 再把「当前状态 + 点击后会发生什么」说完整。
  */
 export const audioContent = {
-  muteAriaSoundOn: '声音：已开启，点击静音',
-  muteAriaSoundOff: '声音：已静音，点击恢复声音',
+  groupLabel: '音频控制',
+  bgm: {
+    /** 按钮上的可见短名；完整名称放在 aria-label 与 title 里。 */
+    shortName: '音乐',
+    ariaOn: '背景音乐：已开启，点击关闭',
+    ariaOff: '背景音乐：已关闭，点击开启',
+  },
+  sfx: {
+    shortName: '音效',
+    ariaOn: '音效：已开启，点击关闭',
+    ariaOff: '音效：已关闭，点击开启',
+  },
+  /** 可见的状态字，与 aria-label 表达同一件事。 */
+  stateOn: '开',
+  stateOff: '关',
 }
 
 export const startContent = {

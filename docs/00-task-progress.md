@@ -26,7 +26,7 @@
 | 交互体验 | I03 | 本地存档 | localStorage | P1 | 已完成 | 刷新后可继续，结局后可重开 | 存档键 `mirror-agent:story-save`，直接持久化正式 `StoryState`（见下方“I03 说明”）。`src/utils/story/storySave.ts` 提供 load / save / clear / validate，恢复前逐字段校验并复用正式剧情索引；损坏、旧版本、引用失效的存档安全清除后按无存档处理，localStorage 不可用时静默降级为不保存。存档只处理剧情状态，音频偏好仍属 A01 且必须使用独立键 |
 | 音频体验 | A01 | 启动遮罩与音频管理 | `StartupGate` 覆盖层、全局音频管理 | P1 | 已完成 | 详见下方“A01 验收标准” | 应用级 `StartupGate` + `inert` 业务层 + 固定右上角静音按钮；音频状态所有者只有一个（`utils/audio/bgmPlayer.ts`）。用户偏好升级到 v2，加入 `muted` / `masterVolume`，写入口合并为 `useUserPreferences`。详见下方“A01 / A02 说明” |
 | 音频体验 | A02 | BGM 场景映射与切换 | BGM 场景映射与切换逻辑 | P1 | 已完成 | 详见下方“A02 验收标准” | 场景解析集中在 `utils/audio/bgmScene.ts`（纯函数），资源与音量集中在 `data/audioTracks.ts`；`manifest.ts` 保持不变。实测一次完整通关只创建 5 个 Audio 实例、只换 4 次曲。详见下方“A01 / A02 说明” |
-| 音频体验 | A03 | SFX 接入与音量平衡 | 音效触发与音量策略 | P2 | 未开始 | 详见下方“A03 验收标准” | 依赖 A01；时间不足时可延后，不阻塞通关 |
+| 音频体验 | A03 | SFX 接入与音量平衡 | 音效触发与音量策略 | P2 | 已完成 | 详见下方“A03 验收标准” | 四种 SFX（click／choice／typing／warning）接入，背景音乐与音效各有独立开关。剧情选择的音效在确认被接受时立即触发。触发判定与限频策略全部是纯函数。详见下方“A03 SFX 说明”。**音量仍未经听觉验收** |
 | 视觉实现 | V01 | 全局视觉风格 | `src/styles/global.css` | P1 | 已完成 | 暗色、安静、AI 终端感、可读性好 | 变量分组重排、字体层级、面板与按钮底色、开始页成稿构图、结局页仪式感、状态面板移动端压缩、1024px 拥挤修复。正文桌面 17px／移动 16px，实测对比度全部 ≥ 4.5:1。视觉规范见 `docs/04-ui-visual-spec.md` |
 | 视觉实现 | V02 | 页面背景与插画接入 | 背景图、渐变、遮罩 | P1 | 已完成 | 每章有氛围区分且风格统一 | 七个视觉场景（start / prologue / 第一至第五章-结局）。场景解析集中在 `utils/visualScene.ts` + `data/visualScenes.ts`，背景层组件 `components/visual/SceneBackground.tsx`。只在场景键变化时换图，一次完整通关恰好 7 次图片请求、7 个唯一 URL。`bg-start` 是开始页成稿，`contain` 完整显示；序章用独立的 `bg-prologue`。资源映射见 `docs/05-assets-map.md` §3 |
 | 传播功能 | S01 | 复制镜像报告 | 结局页按钮 | P2 | 未开始 | 可复制结局标题、报告、变量描述 | 不支持 Clipboard 时要降级 |
@@ -74,10 +74,12 @@
 
 ### A03 SFX 接入与音量平衡
 
-- 普通按钮、剧情选择、警告和结局揭示音效按 `docs/05-assets-map.md` §7 的映射触发；
+- 普通按钮、剧情选择、打字机和第四章警告音效按 `docs/05-assets-map.md` §7 的映射触发；
+  结局揭示音效未启用，作为预留素材保留；
 - 音效音量低于 BGM 与阅读体验的容忍线，不盖过正文阅读；
+- 剧情选择的反馈要跟手：确认选择被接受时立即出声，不等状态提交与存档写入；
 - 连续快速点击不产生严重叠音（同一音效需要节流或复用实例）；
-- 静音时 BGM 与 SFX 同时停止，没有任何遗漏通道；
+- 背景音乐与音效是两个独立开关，各自关闭时对应通道完全停止，没有遗漏；
 - 打字机音效不能为每个字符完整播放一次，需要按间隔或按段落节流。
 
 ---
@@ -338,15 +340,17 @@ StartPage / GamePage / EndingPage 完全不认识音频，也不持有任何 Aud
   然后**无条件**关闭遮罩：解锁失败、文件 404、解码失败、被浏览器拒绝都不弹窗、不显示错误页，
   只在控制台 `warn` 一次并静默降级为无声。
 - 「点击进入实验」与 StartPage 的「开始初始化／继续实验」是两个独立动作，遮罩不读写剧情存档。
-- 静音按钮由 `App` 渲染一次、`position: fixed` 在右上角，因此三个页面上位置完全一致；
-  原生 `button` + `aria-pressed` + 明确 `aria-label`（「声音：已开启，点击静音」／
-  「声音：已静音，点击恢复声音」），键盘可用并保留 focus-visible。
+- 背景音乐与音效各有一个独立开关（`components/audio/AudioToggles.tsx`），由 `App`
+  渲染一次、`position: fixed` 在右上角，因此三个页面上位置完全一致；
+  原生 `button` + `aria-pressed` + 明确 `aria-label`，键盘可用并保留 focus-visible。
   它在剧情舞台之外，点击不会冒泡到 GamePage 的阅读推进热区。
-- 静音立即停止并释放实例（不淡出、不保留播放位置）；恢复声音时按**当前场景**新建实例淡入。
-- 偏好升级到 `version: 2`：`{ autoplayEnabled, muted, masterVolume }`。
+- 关闭背景音乐时立即停止并释放实例（不淡出、不保留播放位置）；
+  重新开启时按**当前场景**新建实例淡入。
+- 偏好结构是 `version: 3`：`{ autoplayEnabled, bgmMuted, sfxMuted, masterVolume }`。
   版本策略是「`version` 只记录写入时的结构，读取一律逐字段校验后与默认值合并」，
-  所以 v1 偏好的升级结果就是「保留 autoplayEnabled + 音频取默认值」，不需要一串 migrate 函数；
-  版本号更高或缺失时同样按字段回收，不整份判死。`masterVolume` 只接受有限数字并夹到 0–1。
+  旧的单一 `muted` 字段按「新字段 → 旧 `muted` → 默认值」的回落链读取，不需要一串
+  migrate 函数；版本号更高或缺失时同样按字段回收，不整份判死。`masterVolume` 只接受
+  有限数字并夹到 0–1。
 - 写入口只有一个。原来的 `useAutoplayPreference` 直接写 `{ version, autoplayEnabled }`，
   加音频字段后会在切换自动播放时抹掉静音状态，因此合并成 `useUserPreferences`：
   每次都基于最新的完整偏好打补丁再整份写回，两类偏好互不覆盖（两个方向都有测试）。
@@ -463,7 +467,222 @@ GamePage 上点静音按钮不推进剧情（节点、块数、正文长度均�
 
 ---
 
-## I03 本地存档说明（2026-07-29）
+## A03 SFX 说明
+
+只覆盖 A03。BGM 曲目映射、切歌边界、已校准的轨道音量、交叉淡入淡出时长、
+StartupGate 启动流程、StoryState 与存档 schema、剧情节点与文案、结局规则、
+视觉场景解析、I01 阅读状态机的行为定义，全部未动。
+
+### 结构
+
+| 文件 | 职责 |
+|---|---|
+| `src/types/audio.ts` | `SfxKey` / `SfxTrack`（原有 BGM 类型不变） |
+| `src/data/audioTracks.ts` | 唯一维护 SFX 路径、音量与实例策略的地方 |
+| `src/utils/audio/sfxPlayer.ts` | SFX 执行器：实例池、节流、独占、截断、静音／隐藏／失败降级、偏移防御性夹取 |
+| `src/utils/audio/sfxActions.ts` | 界面动作 → 音效的映射（纯函数），全项目唯一的按钮清单 |
+| `src/utils/audio/typingSfx.ts` | 打字声的抽样策略（纯函数 + 纯状态） |
+| `src/utils/audio/sfxTriggers.ts` | 第四章警告的场景判定 + 只认上升沿的一次性闸门（纯函数） |
+| `src/utils/story/readingReveal.ts` | 揭示进度事件（阅读域的纯函数，不认识声音） |
+| `src/hooks/useSfxPlayer.ts` | 把 SFX 执行器接到 React 生命周期，返回稳定的语义化入口 |
+| `src/hooks/useSfxTriggers.ts` | `useTypingSfx` 与 `useOneShotSfx` 两个薄外壳 |
+| `src/hooks/useStoryReadingSequence.ts` | 多一个可选的 `onReveal` 订阅口 |
+| `src/components/audio/AudioToggles.tsx` | 背景音乐／音效两个独立开关 |
+| `src/utils/userPreferences.ts` | 用户偏好（`autoplayEnabled` / `bgmMuted` / `sfxMuted` / `masterVolume`） |
+| `src/App.tsx` | 全部接线：解锁、动作音效、两个音频开关、第四章一次性场景音效 |
+
+### 与 BGM 系统的关系
+
+`useBgmPlayer` 与 `useSfxPlayer` 是同一套音频状态下并列的两个执行器，不是两套系统：
+
+- 主音量与解锁标记共用，静音状态各读各的通道 —— BGM 只读 `bgmMuted`，SFX 只读 `sfxMuted`，
+  两个通道由同一个 `useUserPreferences` 持有，没有第二套偏好所有者；
+- 没有第二个 `AudioContext`，没有第三方音频库；
+- 两者互不引用：SFX 不知道现在在放哪首 BGM，BGM 也不知道有没有音效在响。
+  唯一的耦合是「警告音与 `bgm-control-mode` 共用同一个切入节点」这一条设计约定。
+
+音量组合只有两层，没有未说明的多层相乘：
+
+```txt
+最终音量 = clamp(masterVolume × 轨道 gain, 0, 1)
+```
+
+BGM 多一层淡变系数（只在 600ms 交叉期间生效），SFX 没有淡变。
+`masterVolume` 是 NaN 或越界时同样先夹取，写进 `HTMLAudioElement.volume` 的值恒在 0–1。
+
+### 两个独立的音频开关
+
+背景音乐与音效各有一个开关，不设第三个「全部静音」总开关。原生 `<button>` +
+`aria-pressed`，可见的「开／关」文字承担主要的状态表达（不只靠图标），
+`aria-label` / `title` 说明完整含义，键盘可用。固定在右上角，三个页面位置一致，
+不冒泡到 GamePage 的阅读推进热区。
+
+偏好结构 `{ version: 3, autoplayEnabled, bgmMuted, sfxMuted, masterVolume }`，
+`version` 只记录写入时的结构，读取一律逐字段校验后与默认值合并；旧的单一 `muted`
+字段按「新字段 → 旧 `muted` → 默认值」的回落链读取：v1 或缺失 `muted` 时两个通道
+都开启，旧 `muted: true` 迁移为两个通道都关闭，`muted: false` 迁移为两个通道都开启，
+只坏了其中一个新字段时那个字段单独回落、另一个不受影响。`autoplayEnabled` 与
+`masterVolume` 在所有情况下原样保留，写回后旧的 `muted` 字段不再出现。
+
+写入口只有 `useUserPreferences` 一个，每次都基于最新的完整偏好打补丁再整份写回，
+两个通道互不覆盖。重新初始化剧情只清剧情存档，不碰音频偏好。
+
+关闭音效时不播放点击（避免变成拖尾或残留的一声响）；开启音效后播放一次轻点击作为确认，
+此时通道状态已经先一步下发给播放器，不存在状态倒置。背景音乐开关两个方向都播放点击，
+不依赖 BGM 自身的起停作为反馈。
+
+### 四种音效的触发点
+
+| 音效 | 触发点 |
+|---|---|
+| `click_soft` | 已被接受的普通操作按钮：StartupGate 进入实验、StartPage 开始／继续／重新初始化、GamePage 继续／查看镜像报告、EndingPage 重新初始化、DataErrorPage 返回开始页、自动播放开关、背景音乐开关（两个方向）、开启音效的确认 |
+| `choice_select` | 确认这个选项属于当前节点、真正会被接受之后**立即**触发，再执行 `applyChoice`／路由解析／状态提交／存档；不叠加普通点击 |
+| `text_type` | 阅读调度器每走完一步逐字／逐单元揭示之后，由抽样策略决定要不要响 |
+| `warning_soft` | 首次真正进入 `ch4.protection_protocol`，与 `bgm-control-mode` 同一切入边界 |
+
+`ending_reveal` 不参与运行时播放：结局只保留一直在播的 `bgm-ending` 与页面自身的
+视觉过渡，素材文件与授权记录保留，运行时不再有对应的键与配置。
+
+按钮盘点的结论：只给真正的操作按钮配声，不为覆盖率机械地给每个小控件都加声音。
+剧情选项走 `choice_select` 而不是普通点击，两者是独立的 handler，`ChoiceList`
+本身又 `stopPropagation`，不会双播。第四章所有选项继续使用 `choice_select`，
+不使用 `warning_soft`：warning 表达的是「进入异常接管状态」，不是选择确认，
+反复播放会削弱语义并打扰阅读。
+
+被逻辑拒绝的操作不发声：disabled 按钮不会触发 handler；GamePage 的锁保证一次点击
+只提交一次；找不到当前节点或选项不属于当前节点（来自已翻过去的旧节点）都不出声。
+键盘激活走的是原生 `<button onClick>` 的同一段代码，与鼠标／触摸完全一致。
+
+### 打字声的抽样策略
+
+打字声不建立第二套调度：`useStoryReadingSequence` 在每次状态转换提交之后，
+把「刚刚揭示了什么、是什么原因造成的」（`tick` / `enterBlock` / `skip` / `complete` /
+`reducedMotion`）通知出去，音频层据此判断要不要响。只有 `cause === 'tick'` 才可能
+发声，因此玩家点击补全当前块、一次看完整段、关闭自动播放的立即刹车、减少动态模式
+的立即完整显示、进入新块本身，都不会补播。`instant`、divider、空块不产生揭示步骤。
+
+参数集中在 `TYPING_SFX_POLICY`：逐字模式累计 6 个字素才允许响一次，两次之间最少
+间隔 160ms；结构化块（整行揭示）的最小间隔是 450ms，明显更稀疏。累计上限就是阈值
+本身，揭示得再快也只是「够响一次」，不会攒出一串补播；素材被截成 110ms 一次击键，
+快速揭示时不会连成机械噪声。展示序列变化时限频状态整份重置。
+
+### 第四章警告与刷新恢复
+
+判定拆成两半，都在 `utils/audio/sfxTriggers.ts`：场景判定只认入口节点
+`ch4.protection_protocol`，第四章内部的分支、结果、汇流节点一律不算；一次性闸门
+只认上升沿，rerender、状态面板更新、打字揭示、自动播放切换、Strict Mode 的重复
+effect 都不会重复播放，离开场景后闸门重新装填，重新初始化再走一遍可以再响一次。
+
+从存档恢复到 `ch4.protection_protocol` 时不播放警告：这个音效表达的是「进入警告
+场景」，恢复存档的玩家并没有进入，他本来就在里面；如果恢复时也播，玩家每刷新一次
+就会被惊一次。真正走剧情进来时照常响一次。
+
+### 实例复用与防叠音
+
+| 音效 | 池大小 | 最小间隔 | 截断 | 独占 |
+|---|---|---|---|---|
+| `click_soft` | 1 | 55ms | 220ms | 否 |
+| `choice_select` | 1 | 200ms | 900ms | 否 |
+| `text_type` | 3 | 70ms | 110ms | 否 |
+| `warning_soft` | 1 | 0 | 1000ms | 是 |
+
+实例池在「确认要出声」时一次建好就不再增长，触发只是「找一个空闲实例，或者把最旧
+的那个停下重播」，绝不每次 `play()` 都 `new Audio()`。截断有两个作用：素材尾部的
+静音不占着实例，以及把连续素材（打字机源文件）切成一次击键。独占音效正在播时忽略
+新的触发，既不重叠也不重启。全局并发上限 4，超限时先停掉最旧的非独占音效，腾不出
+来时只放行独占音效。短音效被下一次触发打断时浏览器会用 `AbortError` 拒绝上一次的
+`play()`，这是复用实例的预期现象，不当作故障，也不刷控制台。
+
+`choice_select` 与其余三种音效一样从 `currentTime = 0` 起播，不使用偏移；播放器
+的 `seekTo` 对有偏移的轨道额外做一层防御性夹取——已知 `duration` 时把偏移夹到
+`duration` 以内，防止配置的偏移超出文件时长而把整段播放悄悄跳过；`duration` 未知
+时按原始偏移直接赋值，赋值本身不抛错，播放也不会因此被跳过。
+
+### 静音、页面隐藏与失败
+
+- 关闭对应通道：`stopAll()` 立即压住正在响的音效，之后的触发一律丢弃，不排队、不
+  补播；通道关闭状态下一个实例都不创建。重新开启只是恢复「可以播」，不会把关闭期间
+  丢掉的事件补回来。两个通道互不影响，关一个不影响另一个。
+- 页面隐藏：停止正在播放的短音效并丢弃新的触发；恢复可见时不续播已经过时的音效。
+  BGM 的暂停／续播行为不受影响。
+- 失败：加载失败的音效被永久跳过，`play()` 被拒绝只提示一次，两种都不抛错、不重试
+  到阻塞、不影响剧情、选择、存档、结局与 BGM。没有 `Audio` 实现时全部调用都是空
+  操作。
+- `dispose()` 清掉全部截断 timer、监听与实例；Strict Mode 下卸载重建不遗留在播实例。
+
+### 音量配置
+
+主音量默认 0.5。素材的原始响度差了 20dB 以上，因此用浏览器 `decodeAudioData` 实测
+每个素材「有效发声段」的 RMS，再倒推 gain，让播放响度落在已校准的 BGM 播放响度
+（−23.1 至 −27.5dBFS）这条底噪附近。
+
+| 音效 | 素材 RMS | gain | 主音量 0.5 时的音量 | 播放 RMS |
+|---|---|---|---|---|
+| `text_type` | −32.4 dB | 0.66 | 0.330 | ≈ −42.0 dB |
+| `choice_select` | −21.0 dB | 0.72 | 0.360 | ≈ −29.9 dB |
+| `click_soft` | −14.8 dB | 0.42 | 0.210 | ≈ −28.4 dB |
+| `warning_soft` | −16.4 dB | 0.84 | 0.420 | ≈ −23.9 dB |
+
+排序（轻 → 明显）：`text_type` ≪ `choice_select` < `click_soft` < `warning_soft`，
+由 `tests/sfxTracks.test.ts` 按 `referenceRmsDb + gain` 复算断言，改任何一个 gain
+都会被测试立刻发现。所有音效的播放响度都低于最响的 BGM。
+
+### 验证结果
+
+| 命令 | 结果 |
+|---|---|
+| `npx tsc -b` | 通过 |
+| `npm test`（vitest，399 个用例） | 通过 |
+| `npm run validate:story` | 通过，0 error / 0 warning |
+| `npm run build` | 通过 |
+
+测试覆盖：SFX 资源完整性、路径、音量合法性与听感排序、动作映射
+（`tests/sfxTracks.test.ts`）；解锁、静音、页面隐藏、实例池、节流、独占、截断、
+全局并发上限、起始偏移与防御性夹取、失败降级、dispose 与重建、两个通道互不影响
+（`tests/sfxPlayer.test.ts`）；打字声抽样策略，用真实阅读状态机回放整段序列覆盖
+稀疏度、最小间隔、面板类块、instant／空块／reduced-motion、跳过与刹车不补播
+（`tests/typingSfx.test.ts`）；第四章警告与结局页的一次性触发判定，对着真实剧情
+索引校验入口节点、rerender 不重复、跨章结束、重新初始化后可再触发、三种恢复情形、
+结局页不再有任何 SFX 触发（`tests/sfxTriggers.test.ts`）；偏好 v3 结构、从旧版本
+迁移、损坏数据回退、两个通道互不覆盖（`tests/userPreferences.test.ts`）。
+
+### 浏览器人工验收
+
+因为面板不合成帧、`document.hidden` 恒为 true，验收时改写了 `document.hidden` /
+`visibilityState` 并派发 `visibilitychange`，同时包了 `HTMLMediaElement.play/pause`
+与 `Audio` 构造函数记录每一次播放。
+
+已确认：StartupGate、StartPage、EndingPage 的操作按钮播放 click（音量 0.21）；剧情
+选项点击后立即播放 choice-select（音量 0.36，`currentTime = 0`，handler 阻塞时间
+<1ms），三连击只播放一次、`choiceHistory` 只增加一条，不与普通 click 双播；键盘
+激活（原生 `<button onClick>`）行为与鼠标一致；连续阅读产生稀疏的打字声，按四个
+起始偏移轮转、维持在配置的密度区间内；第四章入口播放一次 warning（音量 0.42）并
+与 `bgm-control-mode` 同时切入，同章后续节点和 rerender 不重复，刷新恢复到入口
+节点不重新惊扰，重新初始化后再次进入可以再响；进入 EndingPage 不播放任何结局相关
+音效，`bgm-ending` 在第五章后半沿用同一个实例、不重启；关闭背景音乐时只有 BGM
+停止、音效仍正常；关闭音效时只有短音效停止、BGM 仍正常；两个通道都关时完全无声；
+恢复任一通道不补播关闭期间错过的事件；页面隐藏时短音效停止、恢复后不补播；快速
+连续切换开关无叠音、无异常新增实例；320／560／768／1280px 下两个开关不与章节头、
+标题、进度、自动播放开关或状态面板文字重叠，GamePage 无横向溢出；全程控制台无
+错误、无媒体错误、无 React 警告。
+
+### 仍需真人确认的限制
+
+- 没有听觉验收：音量按实测素材响度计算得出，不是听出来的，需要戴耳机在真实设备上
+  确认 click／choice／warning 的相对响度与打字声的密度是否合适；调整只需要改
+  `src/data/audioTracks.ts` 的 `gain` 或 `TYPING_SFX_POLICY`。
+- 选择音的「跟手」只验证到 handler 阻塞时间与播放起点，浏览器实际解码并输出第一个
+  采样的真实延迟本环境无法测量。
+- 键盘激活是用等价的 `.click()` 事件验证的，不是真实键盘事件触发的浏览器原生激活
+  （面板未合成帧时的已知限制），需要真机确认一次。
+- 页面隐藏是模拟的，真实切标签页、移动端切后台的行为需要再确认。
+- 只在 Chromium 上验证过，Safari／iOS 的自动播放策略更严格，短音效的实例复用与
+  `currentTime` seek 行为也可能不同。
+- reduced-motion 只有单元测试覆盖，未在浏览器里实际切换过该媒体查询。
+- 两个开关的视觉效果只靠几何测量确认，没有截图。
+---
+
+## I03 本地存档说明
 
 存储键：`mirror-agent:story-save`。存档内容就是正式 `StoryState`，没有第二套状态结构。
 

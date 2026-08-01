@@ -232,15 +232,46 @@ BGM 应保持低存在感，服务于阅读氛围，不应盖过剧情文本。
 public/audio/sfx/
 ```
 
-| 文件 | 用途 |
-|---|---|
-| `sfx-click-soft.mp3` | 普通按钮点击 |
-| `sfx-choice-select.mp3` | 玩家选择剧情选项 |
-| `sfx-text-type.mp3` | 打字机文字音效 |
-| `sfx-warning-soft.mp3` | 第四章失控模式 warning |
-| `sfx-ending-reveal.mp3` | 结局揭示音效 |
+| 文件 | 用途 | 运行时触发点 | 状态 |
+|---|---|---|---|
+| `sfx-click-soft.mp3` | 普通按钮点击 | 已被接受的普通操作按钮；剧情选项与「关闭音效」除外 | 启用 |
+| `sfx-choice-select.mp3` | 玩家选择剧情选项 | 确认选择被接受时**立即**触发，随后才执行状态提交；不叠加普通点击 | 启用，从文件开头播放 |
+| `sfx-text-type.mp3` | 打字机文字音效 | 逐字／逐单元揭示的抽样，被跳过的内容不补播 | 启用 |
+| `sfx-warning-soft.mp3` | 第四章失控模式 warning | **只在**首次进入 `ch4.protection_protocol`，与 `bgm-control-mode` 同一切入边界 | 启用 |
+| `sfx-ending-reveal.mp3` | 结局揭示音效 | 无 | **当前版本未启用**，预留素材 |
 
 音效应轻、短、克制，不要打断阅读。
+
+### 7.1 说明
+
+- `sfx-warning-soft` 只用于第四章入口的一次场景提示，**不**用于第四章的每个选项 ——
+  第四章所有剧情选项继续使用 `sfx-choice-select`。warning 表达的是
+  「进入异常接管状态」，反复播放会削弱语义并打扰阅读。
+- `sfx-ending-reveal` 不参与运行时播放：结局只保留一直在播的 `bgm-ending`
+  与页面自身的视觉过渡。文件保留在 `public/audio/sfx/`，授权记录保留在
+  `credits/audio-credits.md`，运行时不再有对应的键与配置，将来换素材时可以
+  直接复用这个位置。
+- `sfx-choice-select` 从文件开头播放，不使用起始偏移。
+
+### 7.2 维护位置
+
+映射与音量集中维护在代码里，页面和事件处理器都不写死路径或数值：
+
+```txt
+src/types/audio.ts                 SfxKey 与 SfxTrack 类型
+src/data/audioTracks.ts            唯一维护 SFX 路径、音量与实例策略的地方
+src/utils/audio/sfxActions.ts      界面动作 → 音效的映射（唯一的按钮清单）
+src/utils/audio/typingSfx.ts       打字声的抽样策略
+src/utils/audio/sfxTriggers.ts     第四章警告的场景判定与一次性闸门
+src/utils/audio/sfxPlayer.ts       SFX 执行器（与 bgmPlayer 并列，共用主音量，各读各的开关）
+```
+
+`sfx-text-type.mp3` 是一段 8 秒的连续打字，开头 450ms 是静音：
+运行时从实测的击键起音点开始并在 110ms 后截断，每次只取一次击键，不整段播放。
+起始偏移集中维护在 `data/audioTracks.ts` 的 `startOffsets` 里，不在业务代码里散落 `currentTime`。
+
+音量以已校准的 BGM 播放响度为参照平衡，实测值与触发规则见
+`docs/00-task-progress.md` 的「A03 SFX 说明」。
 
 ---
 

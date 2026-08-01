@@ -533,21 +533,45 @@ img {
 
   只有图标，可见文字为零，名称完全由 aria-label 承担。
 */
-.audio-toggle {
+/*
+  两个音频通道开关（A01 建立，A03 试玩修订拆成 BGM / SFX 两个）。
+
+  固定在右上角的一个容器里，因此三个页面上的位置完全一致。
+  容器负责定位，按钮自身只管自己的形状 —— 这样以后加第三个控件也不会再动定位。
+*/
+.audio-toggles {
   position: fixed;
   top: max(12px, env(safe-area-inset-top));
   right: max(12px, env(safe-area-inset-right));
   z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.audio-toggle {
   display: inline-flex;
   align-items: center;
+  gap: 4px;
+  /*
+    触摸目标（docs/03 §10）：高度直接给到 44px，宽度靠内容撑开并保证不低于 44px。
+    A01 时代这里是一个 40×40 的纯图标按钮，移动端另有一条把它撑到 44×44 的规则；
+    A03 加上通道名与状态字之后，那条固定宽度会把文字压出按钮外，所以已经删掉 ——
+    最小尺寸现在由这里的 min-height / min-width 一处保证，桌面与移动端一致。
+  */
+  min-height: 44px;
+  min-width: 44px;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
+  padding: 0 8px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background-color: rgba(10, 14, 21, 0.72);
   color: var(--color-text-faint);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     border-color var(--transition-fast),
@@ -565,14 +589,39 @@ img {
   outline-offset: 3px;
 }
 
-/* 静音是一个「正在生效的限制」，给它一点提示色，扫一眼就能看出来。 */
-.audio-toggle[aria-pressed='true'] {
+.audio-toggle__icon {
+  flex: none;
+  opacity: 0.85;
+}
+
+.audio-toggle__name {
+  flex: none;
+}
+
+/*
+  状态字是主要的状态表达，不是装饰：图标在这个尺寸下只用来区分通道。
+  开着时用中性色，关掉时用提示色 —— 关闭是一个「正在生效的限制」。
+*/
+.audio-toggle__state {
+  flex: none;
+  padding: 1px 3px;
+  border-radius: 4px;
+  background-color: rgba(157, 187, 255, 0.12);
+  color: var(--color-text-muted);
+}
+
+.audio-toggle[aria-pressed='false'] {
   border-color: rgba(216, 181, 109, 0.45);
   color: var(--color-warning);
 }
 
-.audio-toggle__icon {
-  flex: none;
+.audio-toggle[aria-pressed='false'] .audio-toggle__state {
+  background-color: rgba(216, 181, 109, 0.16);
+  color: var(--color-warning);
+}
+
+.audio-toggle[aria-pressed='false'] .audio-toggle__icon {
+  opacity: 0.5;
 }
 
 /* ---------- StartPage ---------- */
@@ -1448,19 +1497,43 @@ img {
   }
 
   /*
-    给右上角的声音开关让位（A01）。
+    给右上角的两个音频开关让位（A01 建立，A03 拆成两个后加宽）。
 
     只有单列布局需要：两列时剧情列被 --max-reading-width 卡在 720px，
     右边缘离视口右上角还有一大截，开关落在空白里什么都不挡。
-    单列后章节头铺满舞台，进度与自动播放开关就会顶到声音开关下面。
-    52px = 开关 44 + 视口边距 12 之外再留一点余量。
+    单列后章节头铺满舞台，进度与自动播放开关就会顶到音频开关下面。
+    138px = 两个开关约 118 + 视口边距 12 之外再留一点余量；
+    章节头本来就是 flex-wrap，让位后最多多折一行，不会挤压正文区的固定高度。
 
     让位只给真正落在开关下面的那一行。状态面板不整卡收内边距：
     那会连带压窄下面的状态项网格，320px 下有两组文字会折行，
     面板高度涨 18px，直接从本来就不多的正文高度里扣（I01 的固定舞台）。
   */
   .game__header {
-    padding-right: 52px;
+    padding-right: 168px;
+  }
+}
+
+/*
+  很窄的屏幕上收掉通道名，只留图标与「开／关」（A03）。
+
+  两个带名字的开关约 168px，在 320px 上会把章节头压得只剩一半。
+  收掉名字之后每个开关约 52px，让位降到 116px，章节头仍然放得下进度与自动播放。
+  语义没有损失：状态仍然是可见文字（要求是「不只依赖图标表达状态」），
+  完整的通道名留在 aria-label 与 title 里，屏幕阅读器和长按提示都读得到。
+*/
+@media (max-width: 520px) {
+  .audio-toggle__name {
+    display: none;
+  }
+
+  .game__header {
+    padding-right: 116px;
+  }
+
+  /* 开关变窄了，状态带的让位也跟着收回来，别白白吃掉提示语的宽度。 */
+  .status__hint {
+    padding-right: 124px;
   }
 }
 
@@ -1501,12 +1574,6 @@ img {
 
   .game__main {
     gap: 12px;
-  }
-
-  /* 触摸目标补到 44px（docs/03 §10）；位置与桌面一致，仍在右上角。 */
-  .audio-toggle {
-    width: 44px;
-    height: 44px;
   }
 
   /*
@@ -1587,12 +1654,14 @@ img {
     横向状态带里唯一可能贴到右上角的是提示语（order: 2，与标题同一行时靠右）。
     只让它自己收一格，状态项那一行仍然是满宽，不会被挤到折行。
     提示语被挤到第二行时这段内边距只是尾部留白，不产生任何影响。
+
+    A03 把一个音频开关拆成两个之后，右上角占的宽度从 52px 涨到约 172px
+    （两个带名字的开关 160 + 视口边距 12），这里跟着放宽。
+    数字仍然只服务于「提示语不要钻到开关底下」这一件事；
+    很窄的屏幕上开关会收掉通道名，让位也随之变窄，见下面的 520px 断点。
   */
   .status__hint {
-    padding-right: 52px;
-  }
-
-  .status__hint {
+    padding-right: 150px;
     order: 2;
   }
 

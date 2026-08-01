@@ -59,7 +59,8 @@ describe('默认值', () => {
     expect(DEFAULT_USER_PREFERENCES).toEqual({
       version: USER_PREFERENCES_VERSION,
       autoplayEnabled: false,
-      muted: false,
+      bgmMuted: false,
+      sfxMuted: false,
       masterVolume: DEFAULT_MASTER_VOLUME,
     })
   })
@@ -69,13 +70,14 @@ describe('默认值', () => {
     expect(DEFAULT_MASTER_VOLUME).toBeLessThanOrEqual(0.7)
   })
 
-  it('首次进入（没有任何偏好）时自动播放关闭、不静音', () => {
+  it('首次进入（没有任何偏好）时自动播放关闭、两个音频通道都有声', () => {
     installStorage()
 
     const preferences = loadUserPreferences()
 
     expect(preferences.autoplayEnabled).toBe(false)
-    expect(preferences.muted).toBe(false)
+    expect(preferences.bgmMuted).toBe(false)
+    expect(preferences.sfxMuted).toBe(false)
   })
 })
 
@@ -101,22 +103,24 @@ describe('normalizeUserPreferences', () => {
   it('字段类型错误时忽略该值', () => {
     expect(normalizeUserPreferences({ autoplayEnabled: 'yes' }).autoplayEnabled).toBe(false)
     expect(normalizeUserPreferences({ autoplayEnabled: 1 }).autoplayEnabled).toBe(false)
-    expect(normalizeUserPreferences({ muted: 'true' }).muted).toBe(false)
-    expect(normalizeUserPreferences({ muted: 1 }).muted).toBe(false)
+    expect(normalizeUserPreferences({ bgmMuted: 'true' }).bgmMuted).toBe(false)
+    expect(normalizeUserPreferences({ sfxMuted: 1 }).sfxMuted).toBe(false)
   })
 
   it('未知字段被丢弃，认得的字段照常保留', () => {
     const result = normalizeUserPreferences({
       version: 99,
       autoplayEnabled: true,
-      muted: true,
+      bgmMuted: true,
+      sfxMuted: false,
       未来字段: '随便',
     })
 
     expect(result).toEqual({
       version: USER_PREFERENCES_VERSION,
       autoplayEnabled: true,
-      muted: true,
+      bgmMuted: true,
+      sfxMuted: false,
       masterVolume: DEFAULT_MASTER_VOLUME,
     })
   })
@@ -149,7 +153,8 @@ describe('版本升级与旧数据兼容', () => {
     expect(loadUserPreferences()).toEqual({
       version: USER_PREFERENCES_VERSION,
       autoplayEnabled: true,
-      muted: false,
+      bgmMuted: false,
+      sfxMuted: false,
       masterVolume: DEFAULT_MASTER_VOLUME,
     })
   })
@@ -170,8 +175,102 @@ describe('版本升级与旧数据兼容', () => {
     expect(JSON.parse(store[USER_PREFERENCES_KEY])).toEqual({
       version: USER_PREFERENCES_VERSION,
       autoplayEnabled: true,
-      muted: false,
+      bgmMuted: false,
+      sfxMuted: false,
       masterVolume: DEFAULT_MASTER_VOLUME,
+    })
+  })
+
+  /*
+    A03 试玩修订：单一的 muted 拆成 bgmMuted / sfxMuted。
+
+    迁移不是一个独立的 migrate 函数，而是读取时的一条回落链
+    （新字段 → 旧 muted → 默认值），因此这几个用例覆盖的就是运行时真实走的路径。
+  */
+  describe('v2 → v3：单一静音拆成两个通道', () => {
+    it('旧 muted: true 迁移为两个通道都关闭', () => {
+      installStorage({
+        [USER_PREFERENCES_KEY]: '{"version":2,"autoplayEnabled":false,"muted":true}',
+      })
+
+      const preferences = loadUserPreferences()
+
+      expect(preferences.bgmMuted).toBe(true)
+      expect(preferences.sfxMuted).toBe(true)
+    })
+
+    it('旧 muted: false 迁移为两个通道都开启', () => {
+      installStorage({
+        [USER_PREFERENCES_KEY]: '{"version":2,"autoplayEnabled":false,"muted":false}',
+      })
+
+      const preferences = loadUserPreferences()
+
+      expect(preferences.bgmMuted).toBe(false)
+      expect(preferences.sfxMuted).toBe(false)
+    })
+
+    it('迁移不丢失 autoplayEnabled 与 masterVolume', () => {
+      installStorage({
+        [USER_PREFERENCES_KEY]:
+          '{"version":2,"autoplayEnabled":true,"muted":true,"masterVolume":0.3}',
+      })
+
+      const preferences = loadUserPreferences()
+
+      expect(preferences.autoplayEnabled).toBe(true)
+      expect(preferences.masterVolume).toBe(0.3)
+      expect(preferences.bgmMuted).toBe(true)
+      expect(preferences.sfxMuted).toBe(true)
+    })
+
+    it('写回之后旧的 muted 字段不再出现在存储里', () => {
+      const store = installStorage({
+        [USER_PREFERENCES_KEY]: '{"version":2,"autoplayEnabled":true,"muted":true}',
+      })
+
+      saveUserPreferences(loadUserPreferences())
+
+      const written = JSON.parse(store[USER_PREFERENCES_KEY])
+
+      expect(written.version).toBe(USER_PREFERENCES_VERSION)
+      expect(written.muted).toBeUndefined()
+      expect(written.bgmMuted).toBe(true)
+      expect(written.sfxMuted).toBe(true)
+      expect(written.autoplayEnabled).toBe(true)
+    })
+
+    it('新字段存在时以新字段为准，旧 muted 不再干扰', () => {
+      installStorage({
+        [USER_PREFERENCES_KEY]:
+          '{"version":3,"muted":true,"bgmMuted":false,"sfxMuted":true,"autoplayEnabled":true}',
+      })
+
+      const preferences = loadUserPreferences()
+
+      expect(preferences.bgmMuted).toBe(false)
+      expect(preferences.sfxMuted).toBe(true)
+    })
+
+    it('只坏了一个新字段时，它单独回落到旧 muted，另一个不受影响', () => {
+      installStorage({
+        [USER_PREFERENCES_KEY]: '{"version":3,"muted":true,"bgmMuted":"坏了","sfxMuted":false}',
+      })
+
+      const preferences = loadUserPreferences()
+
+      expect(preferences.bgmMuted).toBe(true)
+      expect(preferences.sfxMuted).toBe(false)
+    })
+
+    it('v1 偏好（连 muted 都没有）迁移为两个通道都开启', () => {
+      installStorage({ [USER_PREFERENCES_KEY]: '{"version":1,"autoplayEnabled":true}' })
+
+      const preferences = loadUserPreferences()
+
+      expect(preferences.bgmMuted).toBe(false)
+      expect(preferences.sfxMuted).toBe(false)
+      expect(preferences.autoplayEnabled).toBe(true)
     })
   })
 
@@ -183,13 +282,15 @@ describe('版本升级与旧数据兼容', () => {
 
   it('未来版本号不会让整份偏好作废', () => {
     installStorage({
-      [USER_PREFERENCES_KEY]: '{"version":99,"autoplayEnabled":true,"muted":true}',
+      [USER_PREFERENCES_KEY]:
+        '{"version":99,"autoplayEnabled":true,"bgmMuted":true,"sfxMuted":false}',
     })
 
     const preferences = loadUserPreferences()
 
     expect(preferences.autoplayEnabled).toBe(true)
-    expect(preferences.muted).toBe(true)
+    expect(preferences.bgmMuted).toBe(true)
+    expect(preferences.sfxMuted).toBe(false)
   })
 })
 
@@ -212,33 +313,60 @@ describe('读写', () => {
     expect(loadUserPreferences().autoplayEnabled).toBe(false)
   })
 
-  it('静音状态可以保存并在刷新后保留', () => {
+  it('两个音频通道可以分别保存并在刷新后保留', () => {
     installStorage()
 
-    saveUserPreferences({ ...DEFAULT_USER_PREFERENCES, muted: true })
+    saveUserPreferences({ ...DEFAULT_USER_PREFERENCES, bgmMuted: true, sfxMuted: false })
 
-    expect(loadUserPreferences().muted).toBe(true)
+    expect(loadUserPreferences().bgmMuted).toBe(true)
+    expect(loadUserPreferences().sfxMuted).toBe(false)
+
+    saveUserPreferences({ ...loadUserPreferences(), bgmMuted: false, sfxMuted: true })
+
+    expect(loadUserPreferences().bgmMuted).toBe(false)
+    expect(loadUserPreferences().sfxMuted).toBe(true)
   })
 
-  it('整份写回：改静音不会顺手把自动播放改掉', () => {
+  it('切换一个通道不会覆盖另一个通道', () => {
+    installStorage()
+
+    saveUserPreferences({ ...DEFAULT_USER_PREFERENCES, sfxMuted: true })
+    saveUserPreferences({ ...loadUserPreferences(), bgmMuted: true })
+
+    const both = loadUserPreferences()
+
+    expect(both.sfxMuted).toBe(true)
+    expect(both.bgmMuted).toBe(true)
+
+    // 只恢复背景音乐，音效仍然关着。
+    saveUserPreferences({ ...both, bgmMuted: false })
+
+    const next = loadUserPreferences()
+
+    expect(next.bgmMuted).toBe(false)
+    expect(next.sfxMuted).toBe(true)
+  })
+
+  it('整份写回：改音频通道不会顺手把自动播放改掉', () => {
     installStorage()
 
     saveUserPreferences({ ...DEFAULT_USER_PREFERENCES, autoplayEnabled: true })
 
     const current = loadUserPreferences()
 
-    saveUserPreferences({ ...current, muted: true })
+    saveUserPreferences({ ...current, bgmMuted: true, sfxMuted: true })
 
     const next = loadUserPreferences()
 
     expect(next.autoplayEnabled).toBe(true)
-    expect(next.muted).toBe(true)
+    expect(next.bgmMuted).toBe(true)
+    expect(next.sfxMuted).toBe(true)
   })
 
-  it('整份写回：改自动播放也不会把静音状态抹掉', () => {
+  it('整份写回：改自动播放也不会把两个音频通道抹掉', () => {
     installStorage()
 
-    saveUserPreferences({ ...DEFAULT_USER_PREFERENCES, muted: true })
+    saveUserPreferences({ ...DEFAULT_USER_PREFERENCES, bgmMuted: true, sfxMuted: true })
 
     const current = loadUserPreferences()
 
@@ -246,7 +374,8 @@ describe('读写', () => {
 
     const next = loadUserPreferences()
 
-    expect(next.muted).toBe(true)
+    expect(next.bgmMuted).toBe(true)
+    expect(next.sfxMuted).toBe(true)
     expect(next.autoplayEnabled).toBe(true)
   })
 
@@ -270,7 +399,7 @@ describe('读写', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     expect(loadUserPreferences()).toEqual(DEFAULT_USER_PREFERENCES)
-    expect(saveUserPreferences({ ...DEFAULT_USER_PREFERENCES, muted: true })).toBe(false)
+    expect(saveUserPreferences({ ...DEFAULT_USER_PREFERENCES, sfxMuted: true })).toBe(false)
   })
 
   it('getItem 抛错时回落默认值', () => {
@@ -297,7 +426,7 @@ describe('读写', () => {
     )
     vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    expect(saveUserPreferences({ ...DEFAULT_USER_PREFERENCES, muted: true })).toBe(false)
+    expect(saveUserPreferences({ ...DEFAULT_USER_PREFERENCES, sfxMuted: true })).toBe(false)
     expect(() => loadUserPreferences()).not.toThrow()
   })
 })
@@ -320,13 +449,19 @@ describe('与 I03 剧情存档完全分离', () => {
   it('重新初始化剧情（清空剧情存档）不会清除音频偏好', () => {
     const store = installStorage({ [STORY_SAVE_KEY]: 'STORY-SAVE' })
 
-    saveUserPreferences({ ...DEFAULT_USER_PREFERENCES, muted: true, autoplayEnabled: true })
+    saveUserPreferences({
+      ...DEFAULT_USER_PREFERENCES,
+      bgmMuted: true,
+      sfxMuted: true,
+      autoplayEnabled: true,
+    })
 
     expect(clearStorySave()).toBe(true)
 
     expect(store[STORY_SAVE_KEY]).toBeUndefined()
     expect(store[USER_PREFERENCES_KEY]).toBeDefined()
-    expect(loadUserPreferences().muted).toBe(true)
+    expect(loadUserPreferences().bgmMuted).toBe(true)
+    expect(loadUserPreferences().sfxMuted).toBe(true)
     expect(loadUserPreferences().autoplayEnabled).toBe(true)
   })
 
@@ -342,12 +477,12 @@ describe('与 I03 剧情存档完全分离', () => {
   it('剧情存档损坏也不影响偏好读取', () => {
     installStorage({
       [STORY_SAVE_KEY]: '{ 坏掉的存档',
-      [USER_PREFERENCES_KEY]: '{"version":2,"autoplayEnabled":true,"muted":true}',
+      [USER_PREFERENCES_KEY]: '{"version":3,"autoplayEnabled":true,"sfxMuted":true}',
     })
     vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     expect(loadStorySave().status).toBe('invalid')
     expect(loadUserPreferences().autoplayEnabled).toBe(true)
-    expect(loadUserPreferences().muted).toBe(true)
+    expect(loadUserPreferences().sfxMuted).toBe(true)
   })
 })

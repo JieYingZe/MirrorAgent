@@ -19,6 +19,7 @@ import {
   getVisibleChoices,
   nodeSequenceKey,
 } from '../utils/story'
+import type { ReadingRevealEvent } from '../utils/story/readingReveal'
 import { useStoryReadingSequence } from '../hooks/useStoryReadingSequence'
 import { isTargetVisibleInContainer, resolveContainerScrollDelta } from '../utils/readingScroll'
 import { gameContent } from '../data/uiContent'
@@ -44,6 +45,13 @@ type GamePageProps = {
   onAutoplayEnabledChange: (next: boolean) => void
   onChoose: (choice: StoryChoice) => void
   onContinue: () => void
+  /**
+   * 揭示进度的订阅者（A03）。
+   *
+   * 页面只是把它原样交给阅读 hook，自己不解释、不判断、不持有任何音频对象。
+   * 应用层用它驱动打字机音效；不传时阅读行为与 I01 完全一致。
+   */
+  onReadingReveal?: (event: ReadingRevealEvent) => void
 }
 
 /**
@@ -128,6 +136,7 @@ export default function GamePage({
   onAutoplayEnabledChange,
   onChoose,
   onContinue,
+  onReadingReveal,
 }: GamePageProps) {
   // 提交后短暂上锁，避免快速重复点击写入多条选择记录。
   // ref 拦截同一帧内的重复事件，state 只负责按钮的禁用样式。
@@ -158,7 +167,10 @@ export default function GamePage({
   const sequenceBlocks = showingResponse ? responseBlocks : nodeBlocks
   const sequenceKey = showingResponse ? responseKey : nodeSequenceKey(node.id)
 
-  const reading = useStoryReadingSequence(sequenceBlocks, sequenceKey, { autoplayEnabled })
+  const reading = useStoryReadingSequence(sequenceBlocks, sequenceKey, {
+    autoplayEnabled,
+    onReveal: onReadingReveal,
+  })
 
   useEffect(() => {
     lockedRef.current = false

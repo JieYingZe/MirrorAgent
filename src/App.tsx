@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import StartPage from './pages/StartPage'
 import GamePage from './pages/GamePage'
 import EndingPage from './pages/EndingPage'
@@ -30,11 +30,14 @@ import {
 } from './utils/story'
 import { resolveSceneKey } from './utils/visualScene'
 import { resolveBgmTrack } from './utils/audio/bgmScene'
+import { shouldPlayControlWarning } from './utils/audio/sfxTriggers'
 import { useUserPreferences } from './hooks/useUserPreferences'
 import { useBgmPlayer } from './hooks/useBgmPlayer'
+import { useSfxPlayer } from './hooks/useSfxPlayer'
+import { useOneShotSfx, useTypingSfx } from './hooks/useSfxTriggers'
 import { SceneBackground } from './components/visual/SceneBackground'
 import { StartupGate } from './components/audio/StartupGate'
-import { MuteToggle } from './components/audio/MuteToggle'
+import { AudioToggles } from './components/audio/AudioToggles'
 
 type Screen = 'start' | 'game' | 'ending'
 
@@ -154,6 +157,37 @@ export default function App() {
   const [audioUnlocked, setAudioUnlocked] = useState(false)
 
   /**
+   * 本次会话是「从存档恢复」到哪个节点的（A03）。
+   *
+   * 只有一次性场景音效需要这个信息：恢复到第四章入口时不该再响一次警告，
+   * 那属于「本来就在里面」，不是「进入」。开新一轮时为 null，
+   * 因此重新初始化后再玩到第四章仍然会正常触发。判定见 utils/audio/sfxTriggers.ts。
+   */
+  const [restoredNodeId, setRestoredNodeId] = useState<string | null>(
+    boot.resumable?.currentNodeId ?? null,
+  )
+
+  /**
+   * SFX 播放器（A03）。
+   *
+   * 与 BGM 并列的第二个执行器，共用同一份偏好的主音量与同一个解锁标记，
+   * 但各自读**自己那一路**的开关：这里只读 `sfxMuted`，BGM 只读 `bgmMuted`。
+   * 偏好仍然只有一个所有者（useUserPreferences），没有第二套状态。
+   * 业务层只说「发生了哪个动作」，由音频层决定响什么，
+   * 映射表在 utils/audio/sfxActions.ts。
+   */
+  const sfx = useSfxPlayer({
+    muted: preferences.sfxMuted,
+    masterVolume: preferences.masterVolume,
+    unlocked: audioUnlocked,
+  })
+
+  const { playAction, playSfx } = sfx
+
+  /** 打字机音效：被动订阅阅读揭示进度，不参与也不影响阅读推进。 */
+  const handleReadingReveal = useTypingSfx(playSfx)
+
+  /**
    * 切换节点后把阅读区域滚回顶部。
    *
    * 显示选项专属回应时不滚：此时正文没有换，回应接在原文下面逐段显示，
@@ -226,12 +260,15 @@ export default function App() {
    * 这里既不读也不写，因此重新初始化不会把静音状态或音量改回默认值。
    */
   function handleStartNewRun() {
+    playAction('start_new_run')
     clearStorySave()
 
     const fresh = createInitialStoryState()
 
     clearSessionUi()
     setResumable(null)
+    // 新的一轮不存在「恢复点」，第四章警告等一次性场景音效重新可用。
+    setRestoredNodeId(null)
     setState(fresh)
     setScreen('game')
     saveStorySave(fresh)
@@ -239,18 +276,23 @@ export default function App() {
 
   /** 「继续实验」：恢复已通过校验的存档，临时 UI 状态一律从零开始。 */
   function handleResume() {
+    // 没有存档时这个按钮根本不会渲染；被拒绝的操作不发出任何反馈。
     if (!resumable) return
 
+    playAction('resume_run')
     clearSessionUi()
+    setRestoredNodeId(resumable.currentNodeId)
     setState(resumable)
     setScreen('game')
   }
 
   /** 数据损坏出口：清掉可能有问题的存档，回到开始页。 */
   function handleExitToStart() {
+    playAction('exit_to_start')
     clearStorySave()
     clearSessionUi()
     setResumable(null)
+    setRestoredNodeId(null)
     setState(createInitialStoryState())
     setScreen('start')
   }
@@ -261,6 +303,29 @@ export default function App() {
     if (!node) {
       reportDataError(`找不到当前节点：${state.currentNodeId}。`)
       return
+    }
+
+    /*
+      选择音效（A03 试玩修订：从「提交完成后」提前到「确认被接受时」）。
+
+      原来放在 commitStoryState 之后，声音要等 applyChoice、路由解析、
+      JSON 序列化和 localStorage 写入全部跑完才响，点起来不跟手。
+      现在的顺序是：确认这个选项确实属于当前节点 → 立即出声 → 再跑事务。
+
+      前置条件仍然足够严格，不会为无效操作出声：
+      - 按钮 disabled 时根本不会调到这里；
+      - GamePage 的 withLock 在调用之前就同步上了锁，三连击只会进来一次；
+      - 找不到当前节点会在上面直接 return；
+      - `node.choices` 里没有这个选项，说明它来自已经翻过去的旧节点，不出声。
+      判断只读数据、不改状态，因此提前出声不会让 StoryState 提前或重复写入：
+      applyChoice、路由解析、提交与存档仍然只在下面执行一次。
+      playAction 内部吞掉全部异常，音效失败不会影响选择事务。
+
+      第四章的选项同样走 choice_select：warning 是「进入异常接管状态」的场景音，
+      不是选择确认音。
+    */
+    if (node.choices?.some((item) => item.id === choice.id)) {
+      playAction('select_choice')
     }
 
     const result = applyChoice(state, node, choice)
@@ -290,6 +355,8 @@ export default function App() {
   }
 
   function handleContinue() {
+    playAction('continue_reading')
+
     // 正在显示选项专属回应：只关闭回应，状态早已在选择时提交并保存。
     if (responseStage) {
       setResponseStage(null)
@@ -403,9 +470,10 @@ export default function App() {
             responseBlocks={responseStage?.blocks ?? null}
             responseKey={responseStage?.sequenceKey ?? null}
             autoplayEnabled={preferences.autoplayEnabled}
-            onAutoplayEnabledChange={(next) => updatePreferences({ autoplayEnabled: next })}
+            onAutoplayEnabledChange={handleAutoplayEnabledChange}
             onChoose={handleChoose}
             onContinue={handleContinue}
+            onReadingReveal={handleReadingReveal}
           />
         )
     }
@@ -449,10 +517,32 @@ export default function App() {
   */
   const { unlock } = useBgmPlayer({
     track: resolveBgmTrack(audioScene),
-    muted: preferences.muted,
+    // BGM 只读自己那一路的开关，与音效通道互不影响。
+    muted: preferences.bgmMuted,
     masterVolume: preferences.masterVolume,
     unlocked: audioUnlocked,
   })
+
+  /*
+    第四章失控模式的一次性警告（A03）。
+
+    判定只看「现在是不是在这个场景里」，一次性由闸门保证：闸门只认上升沿，
+    因此状态面板更新、打字揭示、自动播放切换、Strict Mode 的重复 effect
+    都不会重复播放；离开场景后闸门重新装填，重新初始化再走一遍可以再响一次。
+
+    要求遮罩已关闭：用户还没做过任何手势时不能偷偷出声。
+
+    结局页曾经也有一个同样结构的一次性揭示音，A03 试玩修订里取消了
+    （素材偏欢快，与结局的沉重／释然／困惑不符）。结局现在只保留一直在播的
+    bgm-ending 与页面自身的视觉过渡，这里不再有任何结局相关的触发。
+  */
+  const controlWarningActive =
+    !gateOpen && view.surface === 'game' && shouldPlayControlWarning(view.node.id, restoredNodeId)
+
+  useOneShotSfx(
+    controlWarningActive,
+    useCallback(() => playSfx('warning_soft'), [playSfx]),
+  )
 
   /**
    * 「点击进入实验」（A01）。
@@ -465,8 +555,45 @@ export default function App() {
    */
   function handleEnterExperiment() {
     unlock()
+    // SFX 与 BGM 各自解锁一次：两者都需要发生在这次点击的调用栈里。
+    sfx.unlock()
+    playAction('gate_enter')
     setAudioUnlocked(true)
     setGateOpen(false)
+  }
+
+  /**
+   * 背景音乐开关（A03 试玩修订）。
+   *
+   * 只写 `bgmMuted`，完全不碰音效通道。反馈音走普通 click，两个方向都响：
+   * 关掉背景音乐时如果一点声音都没有，玩家无法确认这次点击是不是生效了，
+   * 所以刻意不拿 BGM 自己的起停当反馈。音效通道关着时它自然不响，那是玩家的选择。
+   * BGM 的停止与恢复仍由声明式的 sync 处理，这里不直接操作播放器。
+   */
+  function handleBgmEnabledChange(enabled: boolean) {
+    playAction('toggle_bgm')
+    updatePreferences({ bgmMuted: !enabled })
+  }
+
+  /**
+   * 音效开关（A03 试玩修订）。
+   *
+   * 顺序是有意的：先把新的通道状态送到 SFX 播放器，再决定要不要发出反馈音。
+   * - 关闭音效：这一刻正在响的短音效立即被压住，并且不补一声点击 ——
+   *   否则要么被立刻掐断成拖尾，要么变成无音效态里残留的一响；
+   * - 开启音效：通道已经先一步打开，此时的一声轻点击是「音效回来了」的确认，
+   *   不存在状态倒置。
+   * 只写 `sfxMuted`，完全不碰背景音乐通道。
+   */
+  function handleSfxEnabledChange(enabled: boolean) {
+    updatePreferences({ sfxMuted: !enabled })
+    sfx.setMuted(!enabled)
+    playAction(enabled ? 'sfx_on' : 'sfx_off')
+  }
+
+  function handleAutoplayEnabledChange(next: boolean) {
+    playAction('toggle_autoplay')
+    updatePreferences({ autoplayEnabled: next })
   }
 
   return (
@@ -485,9 +612,11 @@ export default function App() {
 
         {/* 固定在右上角，因此三个页面上的位置完全一致，不随页面结构跳动。 */}
         {!gateOpen && (
-          <MuteToggle
-            muted={preferences.muted}
-            onMutedChange={(next) => updatePreferences({ muted: next })}
+          <AudioToggles
+            bgmEnabled={!preferences.bgmMuted}
+            sfxEnabled={!preferences.sfxMuted}
+            onBgmEnabledChange={handleBgmEnabledChange}
+            onSfxEnabledChange={handleSfxEnabledChange}
           />
         )}
       </div>
