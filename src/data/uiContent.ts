@@ -9,10 +9,14 @@
  *
  * 三行文案由 docs/05-assets-map.md §8 与 docs/03-interaction-design.md §3.1 规定，
  * 不要在这里加第四行说明：遮罩只承担「一次用户手势」这一件事。
+ *
+ * 两个按钮（A03 试玩修订）：「启动实验」按当前音频偏好解锁声音，
+ * 「静默启动」把两路通道都关掉、不解锁音频，两者都会关闭遮罩。
  */
 export const startupGateContent = {
-  title: 'MIRROR AGENT',
-  action: '点击进入实验',
+  title: 'Mirror Agent',
+  action: '启动实验',
+  silentAction: '静默启动',
   hint: '建议佩戴耳机',
 }
 

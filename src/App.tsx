@@ -31,6 +31,7 @@ import {
 import { resolveSceneKey } from './utils/visualScene'
 import { resolveBgmTrack } from './utils/audio/bgmScene'
 import { shouldPlayControlWarning } from './utils/audio/sfxTriggers'
+import { loadUserPreferences } from './utils/userPreferences'
 import { useUserPreferences } from './hooks/useUserPreferences'
 import { useBgmPlayer } from './hooks/useBgmPlayer'
 import { useSfxPlayer } from './hooks/useSfxPlayer'
@@ -148,12 +149,21 @@ export default function App() {
   const [preferences, updatePreferences] = useUserPreferences()
 
   /**
-   * 启动遮罩与音频解锁（A01）。
+   * 启动遮罩与音频解锁（A01 建立，A03 试玩修订）。
    *
    * 两个状态都只属于这一次页面加载，不持久化：遮罩每次打开网页出现一次，
    * 解锁标记也随刷新失效（浏览器的自动播放许可同样不跨页面加载保留）。
+   *
+   * 遮罩是否出现由「加载时」的偏好快照决定，只算一次：两路通道都已关闭
+   * 就直接跳过遮罩，只要任一通道开着就显示。这里刻意不读 `preferences`
+   * （它是 state，会在会话中随开关变化），而是单独取一次 loadUserPreferences()
+   * 的快照 —— 这样玩家在本次会话中重新打开声音，不会因为 preferences 变化
+   * 而回头把遮罩弹出来；下次完整刷新页面时才会用最新的偏好重新判断一次。
    */
-  const [gateOpen, setGateOpen] = useState(true)
+  const [gateOpen, setGateOpen] = useState(() => {
+    const initial = loadUserPreferences()
+    return !(initial.bgmMuted && initial.sfxMuted)
+  })
   const [audioUnlocked, setAudioUnlocked] = useState(false)
 
   /**
@@ -563,6 +573,18 @@ export default function App() {
   }
 
   /**
+   * 「静默启动」（A03 试玩修订）。
+   *
+   * 不做任何音频解锁：不调用 unlock / sfx.unlock，也不出确认音，
+   * 因为这条路径的承诺就是「这次不响」。把两路偏好都写成关闭，
+   * 好让下次完整加载时的判定（两路都关闭则跳过遮罩）与这次的选择一致。
+   */
+  function handleSilentStart() {
+    updatePreferences({ bgmMuted: true, sfxMuted: true })
+    setGateOpen(false)
+  }
+
+  /**
    * 背景音乐开关（A03 试玩修订）。
    *
    * 只写 `bgmMuted`，完全不碰音效通道。反馈音走普通 click，两个方向都响：
@@ -621,7 +643,9 @@ export default function App() {
         )}
       </div>
 
-      {gateOpen && <StartupGate onEnter={handleEnterExperiment} />}
+      {gateOpen && (
+        <StartupGate onEnter={handleEnterExperiment} onSilentStart={handleSilentStart} />
+      )}
     </>
   )
 }

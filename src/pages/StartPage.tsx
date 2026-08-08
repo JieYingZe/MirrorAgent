@@ -1,3 +1,4 @@
+import { ArrowRight, RotateCcw } from 'lucide-react'
 import { startContent } from '../data/uiContent'
 
 type StartPageProps = {
@@ -13,6 +14,42 @@ type StartPageProps = {
   /** 「开始初始化」与「重新初始化」是同一个处理流程。 */
   onStart: () => void
   onContinue: () => void
+}
+
+type StartActionProps = {
+  label: string
+  /** 次要动作（重新初始化）：同一族按钮，但不发光、图标换成回转。 */
+  secondary?: boolean
+  onClick: () => void
+}
+
+/**
+ * 开始页的操作按钮。
+ *
+ * 主次两个变体共用同一套尺寸、圆角、字体与深色底，差别只有两处：
+ * 次按钮不渲染外发光层（内发光与边框渐变由 `.start__cta--secondary` 关掉），
+ * 图标由「往前走」的箭头换成「回到起点」的回转。
+ * 三个按钮（开始初始化／继续实验／重新初始化）因此只有一份结构。
+ */
+function StartAction({ label, secondary = false, onClick }: StartActionProps) {
+  const Icon = secondary ? RotateCcw : ArrowRight
+
+  return (
+    <button
+      type="button"
+      className={`button start__cta${secondary ? ' start__cta--secondary' : ''}`}
+      onClick={onClick}
+    >
+      {/*
+        外发光层。它需要一条横向 mask，box-shadow 做不到，只能单独占一层。
+        次按钮静息态没有外发光，整层直接不渲染，不靠把强度调成 0。
+      */}
+      {!secondary && <span className="start__cta-glow" aria-hidden="true" />}
+      {/* 文案单独包一层，才能压在按钮的内发光层之上。 */}
+      <span className="start__cta-label">{label}</span>
+      <Icon className="start__cta-icon" size={18} strokeWidth={1.5} aria-hidden="true" />
+    </button>
+  )
 }
 
 /**
@@ -59,18 +96,13 @@ export default function StartPage({
         <div className="start__actions">
           {canContinue ? (
             <>
-              <button type="button" className="button button--primary" onClick={onContinue}>
-                {startContent.continueAction}
-              </button>
+              <StartAction label={startContent.continueAction} onClick={onContinue} />
 
-              <button type="button" className="button button--ghost" onClick={onStart}>
-                {startContent.restartAction}
-              </button>
+              {/* 行为不变：仍然是「清除剧情存档并从序章重新开始」那一个入口。 */}
+              <StartAction secondary label={startContent.restartAction} onClick={onStart} />
             </>
           ) : (
-            <button type="button" className="button button--primary" onClick={onStart}>
-              {startContent.primaryAction}
-            </button>
+            <StartAction label={startContent.primaryAction} onClick={onStart} />
           )}
         </div>
       </div>

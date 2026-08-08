@@ -41,6 +41,8 @@
   --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     'Segoe UI', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  /* 与开始页成稿标题风格呼应的衬线字体，仅用于启动遮罩标题。 */
+  --font-serif: 'Noto Serif SC', 'Songti SC', 'STSong', Georgia, 'Times New Roman', serif;
 
   /* 长时间阅读用的正文尺寸；移动端在断点里回到 16px。 */
   --font-size-reading: 1.0625rem;
@@ -434,6 +436,260 @@ img {
   border-color: rgba(157, 187, 255, 0.34);
 }
 
+/*
+  开始页主按钮，对齐 UI 参考图（design/ui-mockups/ui-start-desktop.webp）。
+  只加在这一个按钮上，不动 .button--primary 本身，避免牵连其他页面用同一
+  变体的按钮（继续实验、重新开始等），等它们各自被检查时再决定要不要跟进。
+
+  参考图里这颗按钮是四件独立的事，按「一层只干一件事」拆开，互相不叠加、
+  不互相补偿，所以调其中一层不会把另一层带歪：
+
+  1) 底色：深色半透明，左端几乎与背景同深（参考图左端 RGB 约 7,13,20，
+     底图本身约 6,8,10），不是实色块。
+  2) 内部横向光场：一条锚在右侧的线性渐变，负责「整体左暗右亮」这层大关系。
+  3) 边框（::before）：用 mask-composite: exclude 抠出正好 1px 的环，
+     渐变只作用在这 1px 上。这是右边框不显粗的关键 —— 环之外一律不着色，
+     不存在「边框 + inset 亮线」两条线叠在一起的情况。
+  4) 边缘内发光（::after）：两道 inset box-shadow 从整圈边缘向内发光，
+     再叠一层左透明右不透明的 mask 压出左弱右强。mask 连 box-shadow 一起遮，
+     所以左侧内发光是真的被抹掉，不是整体调低了透明度。
+  5) 外发光（.start__cta-glow）：需要同一条左弱右强的横向关系，而 box-shadow
+     只能整圈均匀铺开、做不出横向渐变，所以单独放一层来承接 mask。
+     发光本身画在它的 ::before 的「外」阴影上 —— 外阴影按规范不会画进
+     投影元素的 border-box，因此按钮内部一点都收不到它，再怎么加也不泛白。
+
+  发光强度收在几个 alpha 变量上，hover / focus / active 只改这几个数值。
+  内发光与外发光的扩散距离按 48px 的按钮高度定，改高度时要一起改。
+*/
+.start__cta {
+  /* 1px 边框环从左到右的三段透明度：左端接近不发光，右端几乎实色。 */
+  --cta-ring-dim: 0.31;
+  --cta-ring-mid: 0.7;
+  --cta-ring-bright: 1;
+  /* 边缘向内发光的强度（乘在 ::after 的两道 inset 阴影上）。 */
+  --cta-inner: 1;
+  /* 内部横向光场右端的强度。 */
+  --cta-field: 0.34;
+  /* 右侧外发光强度。 */
+  --cta-outer: 0.46;
+  position: relative;
+  isolation: isolate;
+  justify-content: space-between;
+  gap: 20px;
+  padding-right: 18px;
+  /* 边框交给 ::before 画；这里留 0，让 ::before 的 inset: 0 正好落在按钮外沿。 */
+  border: 0;
+  border-radius: 6px;
+  letter-spacing: 0.22em;
+  font-weight: 400;
+  background:
+    linear-gradient(
+        to right,
+        rgb(142 190 255 / 0) 8%,
+        rgb(142 190 255 / calc(var(--cta-field) * 0.43)) 38%,
+        rgb(142 190 255 / calc(var(--cta-field) * 0.75)) 62%,
+        rgb(142 190 255 / var(--cta-field)) 88%
+      )
+      border-box,
+    linear-gradient(rgb(10 18 32 / 0.55), rgb(10 18 32 / 0.55)) border-box;
+  transition:
+    background var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+/* 边框：正好 1px 的渐变环，左端 0.42、右端 0.96。 */
+.start__cta::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid transparent;
+  border-radius: inherit;
+  background: linear-gradient(
+      to right,
+      rgb(186 206 236 / var(--cta-ring-dim)) 0%,
+      rgb(200 222 255 / var(--cta-ring-mid)) 42%,
+      rgb(226 242 255 / var(--cta-ring-bright)) 74%,
+      rgb(232 247 255 / var(--cta-ring-bright)) 100%
+    )
+    border-box;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  transition: background var(--transition-fast);
+}
+
+/*
+  边缘内发光：两道 inset 阴影，一道贴边（收得紧、亮）、一道向内铺开（散、淡），
+  合起来是参考图里那种「贴着边最亮、约 1/4 个按钮高度内衰减干净」的落差。
+  mask 把左侧压到约两成，只在右侧与上下边偏右的一段留足强度。
+*/
+.start__cta::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 4px rgb(216 236 255 / calc(var(--cta-inner) * 0.52)),
+    inset 0 0 11px rgb(198 224 255 / calc(var(--cta-inner) * 0.48));
+  -webkit-mask-image: linear-gradient(
+    to right,
+    rgb(0 0 0 / 0.12) 0%,
+    rgb(0 0 0 / 0.7) 55%,
+    #000 90%
+  );
+  mask-image: linear-gradient(
+    to right,
+    rgb(0 0 0 / 0.12) 0%,
+    rgb(0 0 0 / 0.7) 55%,
+    #000 90%
+  );
+  pointer-events: none;
+  transition: box-shadow var(--transition-fast);
+}
+
+/*
+  外发光层。自己不画任何东西，只做两件事：把 mask 的横向渐变套在子元素上，
+  以及给 ::before 提供一个正好等于按钮大小的投影体。
+  inset 的负值要留得比发光半径大，否则 mask 的裁切范围会把光晕切掉一截。
+*/
+.start__cta-glow {
+  position: absolute;
+  inset: -34px;
+  z-index: -1;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    rgb(0 0 0 / 0) 6%,
+    rgb(0 0 0 / 0.12) 28%,
+    rgb(0 0 0 / 0.55) 66%,
+    #000 92%
+  );
+  mask-image: linear-gradient(
+    to right,
+    rgb(0 0 0 / 0) 6%,
+    rgb(0 0 0 / 0.12) 28%,
+    rgb(0 0 0 / 0.55) 66%,
+    #000 92%
+  );
+}
+
+.start__cta-glow::before {
+  content: '';
+  position: absolute;
+  inset: 34px;
+  border-radius: 6px;
+  /* 外阴影不会画进这块矩形内部，所以按钮内部收不到一点外发光。 */
+  box-shadow: 6px 0 26px -1px rgb(150 190 255 / var(--cta-outer));
+  transition: box-shadow var(--transition-fast);
+}
+
+/* 文案与箭头压在几层光效之上，不被内发光蒙住。 */
+.start__cta-label {
+  position: relative;
+  z-index: 1;
+}
+
+.start__cta-icon {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  color: var(--color-accent);
+  transition: transform var(--transition-fast);
+}
+
+/*
+  hover / focus：各层小幅上调，不整体位移，箭头单独右移。
+  幅度刻意留小 —— 静息态本身就是发光的，再往上拉一档就会越过参考图的分寸。
+*/
+.start__cta:hover,
+.start__cta:focus-visible {
+  --cta-ring-dim: 0.46;
+  --cta-ring-mid: 0.84;
+  --cta-ring-bright: 1;
+  --cta-inner: 1.22;
+  --cta-field: 0.4;
+  --cta-outer: 0.6;
+}
+
+.start__cta:hover .start__cta-icon,
+.start__cta:focus-visible .start__cta-icon {
+  transform: translateX(3px);
+}
+
+/* 用边框与光晕自己表达焦点态，不再叠加通用的描边轮廓。 */
+.start__cta:focus-visible {
+  outline: none;
+}
+
+/* press：复用 .button:active 的 1px 下压位移，这里只把光收一点。 */
+.start__cta:active {
+  --cta-inner: 0.86;
+  --cta-outer: 0.3;
+}
+
+/*
+  次按钮变体（重新初始化）。
+
+  与主按钮同一族：尺寸、圆角、字距、字号和深色底完全一致，改的只有「发光」这件事 ——
+  三层光按层拿掉，而不是把强度调成 0，这样上面那些 hover / active 的变量再怎么变，
+  次按钮也不会漏出一点光：
+  1) 外发光：整层不渲染（StartPage 里不输出 .start__cta-glow）；
+  2) 内发光：::after 直接 content: none；
+  3) 边框：换成一圈均匀的低亮灰蓝，不再是左暗右亮的渐变环。
+
+  必须写在主按钮的全部规则之后：`:hover` / `:focus-visible` 那几条与这里同为两级
+  选择器，靠源码顺序压过去，不为了排序问题额外堆选择器抬高特异度。
+*/
+.start__cta--secondary {
+  /* 内部横向光场关掉，只留一层与主按钮同深的底。 */
+  background: linear-gradient(rgb(10 18 32 / 0.55), rgb(10 18 32 / 0.55)) border-box;
+}
+
+.start__cta--secondary::before {
+  background: linear-gradient(rgb(148 163 184 / 0.3), rgb(148 163 184 / 0.3)) border-box;
+}
+
+.start__cta--secondary::after {
+  content: none;
+}
+
+/* hover / focus：只提一档亮度，仍然不引入任何发光层。 */
+.start__cta--secondary:hover,
+.start__cta--secondary:focus-visible {
+  background: linear-gradient(rgb(18 27 42 / 0.72), rgb(18 27 42 / 0.72)) border-box;
+}
+
+.start__cta--secondary:hover::before,
+.start__cta--secondary:focus-visible::before {
+  background: linear-gradient(rgb(180 198 224 / 0.5), rgb(180 198 224 / 0.5)) border-box;
+}
+
+/* 主按钮的焦点由光晕自己表达，次按钮没有光，焦点必须交回描边。 */
+.start__cta--secondary:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.start__cta--secondary .start__cta-icon {
+  color: var(--color-text-faint);
+  transition:
+    color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.start__cta--secondary:hover .start__cta-icon,
+.start__cta--secondary:focus-visible .start__cta-icon {
+  color: var(--color-text-muted);
+  /* 回转图标不跟着主按钮右移：那条位移表达的是「往前走」。 */
+  transform: none;
+}
+
 /* 次要动作：与主按钮同尺寸，但不争夺视觉重心。 */
 .button--ghost {
   justify-content: center;
@@ -505,17 +761,115 @@ img {
   text-align: center;
 }
 
-.startup-gate__title {
-  font-size: clamp(1.5rem, 6vw, 2.4rem);
-  font-weight: 600;
-  /* 字距会在最后一个字母后也留出空隙；补一个 text-indent 把整块拉回视觉居中。 */
-  letter-spacing: 0.3em;
-  text-indent: 0.3em;
-  line-height: 1.2;
+.startup-gate__actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  /* 按钮收窄变扁之后间距要跟着放宽，否则两颗按钮会像一个被切开的整体。 */
+  gap: 64px;
 }
 
+/*
+  标题。
+
+  发光按「离字面越远越淡、越散」叠三层，不是一条粗光边：
+  贴着字的一层几乎是白的，只负责让笔画看起来自己在亮；
+  中间一层是冷蓝的辉光；最外一层铺得很开、很淡，作用是让标题周围的黑
+  比画面其余部分稍亮一点，像它真的在发光而不是贴了张图。
+  颜色全部收在低饱和蓝白，不越过 docs/04 §2 的霓虹禁区。
+*/
+.startup-gate__title {
+  /*
+    衬线，与开始页成稿的标题风格呼应。
+
+    试过一版无衬线 + font-weight: 200，换回来了：细字重在这里做不到 ——
+    项目不加载远程字体，本地衬线栈只有常规和粗体两档，而浏览器只合成更粗的字重、
+    不合成更细的，所以衬线上的 200 渲染出来仍然是常规。字号与字距保留了那一版的放大。
+  */
+  font-family: var(--font-serif);
+  font-size: clamp(2.8rem, 7vw, 5.4rem);
+  font-weight: 400;
+  /* 末字后多出的一格用 text-indent 拉回视觉居中。 */
+  letter-spacing: 0.12em;
+  text-indent: 0.12em;
+  line-height: 1.15;
+  margin-bottom: 20px;
+  color: #f2f7ff;
+  text-shadow:
+    0 0 2px rgb(226 240 255 / 0.5),
+    0 0 16px rgb(150 190 255 / 0.32),
+    0 0 52px rgb(110 160 255 / 0.2);
+}
+
+/*
+  遮罩上的两个按钮。
+
+  与开始页的按钮同族：同样的 6px 圆角、0.22em 字距、常规字重和深色底，
+  边框同样是那一圈低亮灰蓝。区别只在于遮罩这一层不发光、不带图标 ——
+  发光是「这是本页要你按的那一颗」的语气，而遮罩上是一次平等的二选一，
+  所以两颗按钮完全一样，也就不需要 .start__cta 那套按层拆开的光效
+  （渐变环、内发光、外发光）：均匀边框用普通 border 一行就够，
+  不必再借 ::before 的 mask 抠 1px。
+
+  hover / focus 的两个色值与 .start__cta--secondary 保持一致，
+  两处一起调时不会走散。
+*/
 .startup-gate__action {
-  min-width: 240px;
+  /*
+    尺寸经过两轮试玩收敛：240×48 太宽像横杠，152×38 又太小压不住场。
+    现在是 196×46 —— 比通用按钮（48）略矮一点点，横竖比约 4.3:1，
+    扁而不小。46 已经越过 44px 的触摸目标下限，移动端不需要再单独放大。
+  */
+  min-width: 196px;
+  min-height: 46px;
+  padding: 9px 26px;
+  justify-content: center;
+  border: 1px solid rgb(148 163 184 / 0.26);
+  border-radius: 6px;
+  background-color: rgb(10 18 32 / 0.55);
+  color: var(--color-text-muted);
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  /* 字距在最后一个字后面也留一格，补一个缩进把文字拉回视觉居中。 */
+  text-indent: 0.22em;
+}
+
+.startup-gate__action:hover,
+.startup-gate__action:focus-visible {
+  border-color: rgb(180 198 224 / 0.5);
+  background-color: rgb(18 27 42 / 0.72);
+  color: var(--color-text);
+}
+
+/*
+  默认路径：「启动实验」。
+
+  提的是边框亮度、底色和文字亮度这三样，不加发光层 —— 遮罩这一层的分寸
+  是「安静地指一下方向」，不是把按钮点亮。两颗按钮的形状仍然完全一样，
+  差别只有明暗，所以并排看过去是一主一次，而不是两种控件。
+*/
+.startup-gate__action--primary {
+  border-color: rgb(157 187 255 / 0.5);
+  background-color: rgb(21 33 55 / 0.8);
+  color: var(--color-text);
+}
+
+.startup-gate__action--primary:hover,
+.startup-gate__action--primary:focus-visible {
+  border-color: rgb(157 187 255 / 0.72);
+  background-color: rgb(29 45 73 / 0.88);
+}
+
+/*
+  自动聚焦时不画焦点描边（试玩修订）。
+
+  玩家还没碰过键盘，那一圈只是打开网页就迎面而来的噪点。
+  一旦按下任意一个键，StartupGate 会把 data-focus-ring 翻成 true，
+  这条规则失效，键盘用户照常拿到完整的描边。
+  压掉的只有描边：上面那条 :focus-visible 的提亮仍然生效，焦点位置始终可见。
+*/
+.startup-gate[data-focus-ring='false'] .startup-gate__action:focus-visible {
+  outline: none;
 }
 
 .startup-gate__hint {
@@ -1566,6 +1920,13 @@ img {
   .screen--game {
     padding-top: 20px;
     padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+
+  /* 手机上两个按钮并排放不下，改回上下排列。 */
+  .startup-gate__actions {
+    flex-direction: column;
+    width: 100%;
+    gap: 36px;
   }
 
   .game__layout {
