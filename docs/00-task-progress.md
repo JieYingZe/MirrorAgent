@@ -32,7 +32,7 @@
 | 视觉实现 | V02 | 页面背景与插画接入 | 背景图、渐变、遮罩 | P1 | 已完成 | 每章有氛围区分且风格统一 | 七个视觉场景（start / prologue / 第一至第五章-结局）。场景解析集中在 `utils/visualScene.ts` + `data/visualScenes.ts`，背景层组件 `components/visual/SceneBackground.tsx`。只在场景键变化时换图，一次完整通关恰好 7 次图片请求、7 个唯一 URL。`bg-start` 是开始页成稿，`contain` 完整显示；序章用独立的 `bg-prologue`。资源映射见 `docs/05-assets-map.md` §3 |
 | 视觉实现 | V03 | 剧情页布局与毛玻璃重构 | `GamePage`、`AiStatusPanel`、`ChoiceList`、`AudioToggles`、`src/styles/global.css` | P2 | 已完成 | 对齐 `design/ui-mockups/` 成稿：上下布局、选项横排、面板毛玻璃、状态面板带图标与英文 | 剧情页改成「顶栏 + 两列」：标题与全部开关收进顶栏，音频开关不再悬浮（`AudioToggles` 增加 `variant`，开始页与结局页仍固定右上角），原来给悬浮控件让位的几段写死 padding 一并删除。左列的 `.panel` 现在同时包住阅读区与选项，滚动条落在面板内侧；`.game__text` 加 `contain: size`，面板因此有确定的最小高度，屏幕过矮时完整长出来而不是被压得比内容还短。选项改网格：桌面 2×2 等高等宽，移动端单列全宽。两块面板改半透明 + `backdrop-filter`，不支持时由 `@supports` 把底色调回实色；剧情页遮罩右半边相应抬了一档。状态面板加图标与英文副标（≤768px 隐藏），标签「自我边界」收成「边界」，状态文案统一四字以内。试玩修订：①毛玻璃再松一档（面板 alpha 下调、模糊 28px、加一层极淡浅色渐变与更亮的边，剧情页遮罩整体松开，`--color-text-faint` 相应提亮）；②业务层 `user-select: none`，双击／拖动不再选中正文，`hasTextSelection()` 随之删除；③自动播放与两个音频开关统一成同一个胶囊外形，「开／关」去掉底色块；④删掉四处「第 X 章载入中 / 下一章标题」的章节过场（源稿与运行时数据同步）；⑤结局页的「开发验证 / DEV SUMMARY」整块移到控制台（`utils/story/endingSummaryLog.ts`）。第二轮试玩修订：⑥圆角整体收小（面板 22→12、卡片 14→9、按钮 14→7），胶囊开关保持 999px；⑦状态面板与正文面板同档透明（`--color-panel` 0.5→0.4）；⑧结局页重做成「一屏三块」：标题区 → 左右两块独立滚动的文本 → 一条矮的状态摘要（图标 + 五档点 + 状态文案，与剧情页共用 `components/status/statusIcons.ts`），移动端解除固定舞台改回长页滚动；⑨结局页补上 S01 的复制按钮，两个按钮都带图标 |
 | 传播功能 | S01 | 复制镜像报告 | 结局页按钮 | P2 | 已完成 | 可复制结局标题、报告、变量描述 | 文本由纯函数生成（`utils/story/endingReportText.ts` + `blockText.ts`），内容全部来自页面上已渲染的块与状态映射：规则 ID、节点 ID、变量裸数字一个都不出现（那些只进控制台）。段落顺序照 `docs/03` §6.2。剪贴板由 `hooks/useClipboardCopy.ts` 承担：成功提示 2.6 秒后自动收回，失败时渲染一个只读 textarea 并自动选中（`user-select` 例外规则），复制失败不影响重新初始化。`tests/endingReportText.test.ts` 8 个用例覆盖各类块的拍平、空内容跳过、段落顺序，并对五个正式结局逐一断言不泄漏内部标识 |
-| 部署发布 | DEP01 | GitHub Pages 配置 | `vite.config.ts`、README | P0 | 未开始 | `npm run build` 通过并可部署 | 注意 base 路径 |
+| 部署发布 | DEP01 | GitHub Pages 配置 | `vite.config.ts`、`.github/workflows/deploy.yml`、README | P0 | 已完成 | `npm run build` 通过并可部署 | 线上地址 <https://jieyingze.github.io/MirrorAgent/>。部署方式：GitHub Actions 官方 Pages 方案（`actions/configure-pages` + `upload-pages-artifact` + `deploy-pages`），不用 `gh-pages` 分支；push `main` 或 `workflow_dispatch` 触发，构建前跑 `validate:story` 与 `test`，产物 `dist/` 上传为 Pages artifact，由独立 deploy job 部署到 `github-pages` environment。站点在仓库名子路径下，`vite.config.ts` 的 `base` 在 build 与 preview 时取 `/MirrorAgent/`、dev 仍取 `/`；`public/audio/` 由 `utils/audio/audioPaths.ts` 拼 `import.meta.env.BASE_URL`，背景图走 Vite import，无需改动。项目没有客户端路由，未加 404.html 之类 SPA hack。仓库 Settings → Pages 的 Source 已设为 GitHub Actions（`configure-pages` 的 `enablement` 用不了：GITHUB_TOKEN 无建站权限，开着会让每次构建失败）。线上验收：StartupGate 出现、开始页背景 `bg-start` 200、进入实验与序章正常、`bg-prologue` 200、BGM 与 SFX 请求为 `/MirrorAgent/audio/...` 且返回 206、localStorage 存档与偏好写入并在刷新后保留、刷新不 404、375px 窄屏取移动图且无横向溢出、控制台无错误 |
 | 测试打磨 | T01 | 移动端适配 | CSS 响应式 | P1 | 未开始 | 320px 宽度可玩，按钮易点 | 重点测手机浏览器 |
 | 测试打磨 | T02 | 试玩反馈 | 反馈记录 | P2 | 未开始 | 至少 3 位朋友试玩，记录卡点和被打动的句子 | 问“哪一句最打到你” |
 
@@ -103,7 +103,7 @@
 
 ### 尚未完成
 
-- 引擎骨架本身已完成，剩余工作见 I01–I03、A01–A03、V01–V02、S01、DEP01、T01–T02。
+- 引擎骨架本身已完成，剩余工作见 I01–I03、A01–A03、V01–V02、S01、T01–T02。
 - `manifest.ts` 的 `backgroundKey` / `musicKey` 目前只是章节级资源键，没有任何运行时消费方；接入分别属于 V02 与 A02。
 
 ---

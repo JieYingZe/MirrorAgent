@@ -4,6 +4,8 @@
 
 你创造了一个 AI。后来，它开始创造你。
 
+在线试玩：<https://jieyingze.github.io/MirrorAgent/>
+
 ## 项目定位
 
 《镜中代理》是一款 AI 心理寓言型网页互动叙事游戏。玩家通过一系列选择训练自己的 AI 代理，最终得到一份“AI 镜像报告”和对应结局。
@@ -70,6 +72,14 @@ npm run validate:story
 ```
 
 `npm run validate:story` 会检查剧情图结构、结局规则与理论占比数据。项目当前没有配置 lint。
+
+## 部署
+
+线上地址：<https://jieyingze.github.io/MirrorAgent/>
+
+push 到 `main` 后由 `.github/workflows/deploy.yml` 自动发布：安装依赖 → `validate:story` → `test` → `build` → 上传 `dist` 作为 Pages artifact → 部署到 GitHub Pages。也可以在 Actions 页面手动触发（`workflow_dispatch`）。仓库 Settings → Pages 的 Source 需要保持 `GitHub Actions`。
+
+站点挂在仓库名子路径下，所以 `vite.config.ts` 的 `base` 是 `/MirrorAgent/`：`npm run build` 和 `npm run preview` 都走这个前缀，`npm run dev` 仍在根路径。`public/audio/` 的文件不经过 Vite 处理，运行时由 `src/utils/audio/audioPaths.ts` 拼 `import.meta.env.BASE_URL`。改仓库名或换域名时，`base` 要跟着改。
 
 ## 素材转换
 
