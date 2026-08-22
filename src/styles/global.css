@@ -18,16 +18,47 @@
   --color-bg-soft: #0d1118;
   --color-bg-deep: #05070b;
 
-  /* 面板底色。alpha 是对比度的下限保证，不是纯装饰：
-     正文区（reading）比通用面板更实，见 .game__text。 */
-  --color-panel: rgba(11, 15, 23, 0.86);
-  --color-panel-reading: rgba(9, 12, 19, 0.92);
+  /*
+    面板底色（V03 改成毛玻璃，试玩后再加强了一档）。
+
+    原来是近乎实色的深底（0.86 / 0.92），面板压在背景图上像一块贴纸。
+    现在降到半透明，可读性改由三件事共同保证：
+    1) 场景遮罩把面板所在的区域压暗（见 .scene[data-surface='game']）；
+    2) 面板自身这层半透明底；
+    3) backdrop-filter 的模糊 —— 把底下的高频细节糊掉，正文不压在纹理上。
+    第 3 条是可选的：浏览器不支持或用户关掉时，下面的 @supports 会把 alpha
+    调回接近原来的实色，对比度不依赖模糊。
+
+    第一版是 0.56 / 0.62，实际看几乎分辨不出毛玻璃：整个游戏是暗色系，
+    模糊之下本来就没什么可看的东西，压得再暗就只剩一块黑。这一版同时松了三处：
+    这里的 alpha、下面 .panel 的模糊半径与浅色渐变，以及剧情页遮罩的强度
+    （遮罩才是主因 —— 背景在面板底下被压到近乎全黑时，模糊多少都看不出来）。
+
+    两块面板现在同一档（0.4）。曾经让通用面板更实一些，因为它站在遮罩
+    最浅的右半边、上面又是全篇最小的那几行字；试玩下来那一档实得看得出来，
+    两块并排时右边像蒙了一层。改成同档之后按 sRGB 41 的背景复核，
+    最小字号那几行（--color-text-faint）仍在 5:1 上下，越过 AA。
+  */
+  --color-panel: rgba(15, 22, 34, 0.4);
+  --color-panel-reading: rgba(11, 17, 27, 0.44);
+  /* 毛玻璃的边：比通用描边亮，玻璃的厚度主要靠这一圈和下面的高光表达。 */
+  --color-panel-edge: rgba(196, 218, 248, 0.17);
+  /* 面板顶部的一道极淡高光，让边缘看起来有厚度而不是一张平面。 */
+  --panel-sheen: inset 0 1px 0 rgba(226, 240, 255, 0.09);
   /* 按钮、开关这类控件的底：同样要在背景图上站得住。 */
   --color-control-bg: rgba(16, 22, 32, 0.78);
 
   --color-text: #e6edf3;
   --color-text-muted: #9aa7b8;
-  --color-text-faint: #8592a3;
+  /*
+    V03 试玩修订又提亮了一点点（原 #8592a3）。
+
+    遮罩松开之后，面板底下最亮的一档背景大约到 sRGB 41；最小号的那几行字
+    （状态项英文副标、进度、开关上的标签）用的就是这个色，
+    在 #8592a3 上算出来正好卡在 4.5:1 的线上，没有余量。
+    提到这一档后约 5.2:1，同时仍然明显暗于 --color-text-muted，层级没有塌。
+  */
+  --color-text-faint: #909db0;
 
   --color-border: rgba(148, 163, 184, 0.2);
   --color-border-strong: rgba(148, 163, 184, 0.32);
@@ -52,16 +83,26 @@
   --letter-spacing-label: 0.14em;
 
   /* ---------- 形状与节奏 ---------- */
-  --radius-panel: 22px;
-  --radius-card: 14px;
-  --radius-button: 14px;
-
-  --max-reading-width: 720px;
-  --max-content-width: 760px;
   /*
-    1080 = 720（正文）+ 296（状态面板）+ 一段留白。
-    再宽的话正文列被 --max-reading-width 卡住不动，多出来的宽度全变成
-    正文与面板之间的空隙，两列看着就散了。
+    圆角（V03 试玩修订：整体收小一档，原 22 / 14 / 14）。
+
+    大圆角配上这个尺寸的面板，边角会圆出一圈明显的弧，整体显得钝、像玩具；
+    这套界面的语气是安静的仪器面板，边角应该几乎是直的，只做一点点倒角。
+    三个值保持「面板 > 卡片 > 按钮」的层级，改的是绝对值不是关系。
+    胶囊开关不在这里：它们是 999px 的正圆角，那是形状本身，不是倒角。
+  */
+  --radius-panel: 12px;
+  --radius-card: 9px;
+  --radius-button: 7px;
+
+  /* 单栏阅读的舒适宽度；剧情页的正文列宽由舞台减去状态面板得到，见下。 */
+  --max-reading-width: 720px;
+  /*
+    1080 = 748（剧情面板）+ 300（状态面板）+ 32 留白。
+
+    剧情面板扣掉左右内边距后正文约 690px，正好落在 --max-reading-width 附近，
+    一行约四十个汉字。舞台再宽，正文行长就会超出舒适区间，
+    2×2 的选项也会拉成两条细长条。
   */
   --max-stage-width: 1080px;
 
@@ -75,6 +116,21 @@
   --transition-scene: 520ms ease;
 
   color-scheme: dark;
+}
+
+/*
+  没有 backdrop-filter 时的退路。
+
+  毛玻璃的可读性有一部分来自模糊本身：它把背景图的高频细节抹平，
+  文字才敢坐在半透明底上。拿掉模糊之后只剩 alpha，所以这里把两块面板底
+  调回接近 V02 时代的实色。只改变量，不改任何一条布局或形状规则。
+*/
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  :root {
+    --color-panel: rgba(11, 15, 23, 0.9);
+    --color-panel-reading: rgba(9, 12, 19, 0.93);
+    --color-panel-edge: var(--color-border);
+  }
 }
 
 *,
@@ -267,27 +323,36 @@ img {
 }
 
 /*
-  剧情页：正文一侧压到近乎全黑，右侧留出画面。
+  剧情页：左边读字、右边看图。
 
-  两道渐变相乘：竖向负责顶部标题区的暗部，横向负责「左边读字、右边看图」。
-  左列合成后约 0.94 不透明，右缘约 0.63 —— 章节之间的氛围差别全靠这一段，
-  再暗一点五张图就会长得一模一样。
+  两道渐变相乘：竖向负责顶部标题区的暗部，横向负责左右的明暗关系。
+
+  V03 试玩修订：整体松了一大档（原来左列合成后约 0.94 不透明）。
+  面板改成毛玻璃之后，遮罩强度直接决定「看不看得出这是玻璃」——
+  面板底下被压到近乎全黑时，模糊多少都只是一块黑，浅色渐变也无从叠加。
+  现在左列合成后约 0.78、右缘约 0.62，背景图在面板底下仍有可辨的层次，
+  被 28px 的模糊糊成柔和的明暗块，玻璃才成立。
+
+  这两个数字是对比度的下限，不是风格偏好：
+  - 左列托着全篇阅读时间最长的正文；
+  - 右缘托着状态面板上最小的那几行字（英文副标用 --color-text-faint）。
+  再往下调之前先按 WCAG AA 复核这两处，尤其是背景图有高光的章节。
 */
 .scene[data-surface='game'] .scene__scrim {
   background-image:
     linear-gradient(
       180deg,
-      rgba(5, 8, 12, 0.82) 0%,
-      rgba(5, 8, 12, 0.62) 32%,
-      rgba(5, 8, 12, 0.7) 100%
+      rgba(5, 8, 12, 0.7) 0%,
+      rgba(5, 8, 12, 0.46) 32%,
+      rgba(5, 8, 12, 0.56) 100%
     ),
     linear-gradient(
       90deg,
-      rgba(5, 8, 12, 0.86) 0%,
-      rgba(5, 8, 12, 0.82) 48%,
-      rgba(5, 8, 12, 0.52) 60%,
-      rgba(5, 8, 12, 0.18) 78%,
-      rgba(5, 8, 12, 0.02) 100%
+      rgba(5, 8, 12, 0.62) 0%,
+      rgba(5, 8, 12, 0.58) 46%,
+      rgba(5, 8, 12, 0.44) 62%,
+      rgba(5, 8, 12, 0.32) 82%,
+      rgba(5, 8, 12, 0.26) 100%
     );
 }
 
@@ -324,6 +389,39 @@ img {
   isolation: isolate;
 }
 
+/*
+  正文不可划选。
+
+  剧情页的整片空白都是「点一下读下一段」的热区，双击或拖动会先把一段话选中、
+  反白，然后玩家还要再点一次才能继续 —— 一次误操作就把叙事拆成了网页。
+  长按弹出的系统复制菜单（-webkit-touch-callout）同理。
+
+  这条规则同时让 GamePage 里原来的「正在划选就不推进」判断失去意义，
+  那个函数已经删掉：选区不会再由玩家产生。
+  唯一保留可选的是数据错误页的错误信息，那是给开发者复制到控制台去查的。
+*/
+.app-shell,
+.startup-gate {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/*
+  例外。
+
+  - 数据错误页的错误信息：那是给开发者复制到控制台去查的；
+  - 输入框：继承来的 user-select: none 会让 textarea 里的文字也选不中，
+    S01「复制镜像报告」失败时的手动复制文本框（docs/03 §6.3）就废了。
+    现在还没有输入框，这条是提前留好的，不是死规则。
+*/
+.error__message,
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .screen {
   flex: 1;
   width: 100%;
@@ -340,9 +438,7 @@ img {
   z-index: 1;
 }
 
-.screen--ending {
-  align-items: center;
-}
+/* 结局页的舞台规则集中在下面的 EndingPage 一节，这里不再单独定义。 */
 
 /* ---------- 通用元素 ---------- */
 
@@ -368,18 +464,34 @@ img {
 }
 
 /*
-  内容面板：背景层的第四层。
+  内容面板：背景层的第四层（V03 起是毛玻璃）。
 
-  半透明实色底 + 细边框，模糊只是加分项 —— 即使浏览器不支持 backdrop-filter，
-  或者用户关掉了它，正文对比度也完全由这层实色底保证。
+  半透明底 + 细边框 + 一道顶部高光 + backdrop-filter 的模糊。
+  模糊在这一版参与了可读性（见 --color-panel 处的说明），因此浏览器不支持时
+  由 @supports 把底色调回实色，对比度不会掉。
 */
 .panel {
   background-color: var(--color-panel);
-  border: 1px solid var(--color-border);
+  /*
+    极淡的浅色渐变，从左上角往下衰减。
+
+    暗色界面里「毛玻璃」的辨识度大半来自这一层，而不是模糊本身：
+    模糊只是把底下糊开，玻璃看起来比周围亮一点才像一块真的玻璃。
+    最亮处也只有 0.075 的白，面板整体仍然远比正文暗，对比度不受影响。
+  */
+  background-image: linear-gradient(
+    158deg,
+    rgba(226, 240, 255, 0.075) 0%,
+    rgba(226, 240, 255, 0.022) 38%,
+    rgba(226, 240, 255, 0) 72%
+  );
+  border: 1px solid var(--color-panel-edge);
   border-radius: var(--radius-panel);
   padding: 24px;
-  box-shadow: var(--shadow-panel);
-  backdrop-filter: blur(10px) saturate(1.05);
+  box-shadow: var(--shadow-panel), var(--panel-sheen);
+  /* 半径给得大：小半径在这种低对比的暗背景上和不模糊几乎没有区别。 */
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  backdrop-filter: blur(28px) saturate(1.5);
 }
 
 .button {
@@ -704,20 +816,40 @@ img {
   background-color: rgba(20, 27, 40, 0.72);
 }
 
+/*
+  选项按钮（V03 起是网格里的一格）。
+
+  height: 100% 把网格行的等高传到按钮上；文案折行时按钮内部自己变高，
+  同一行的另一颗按钮跟着长到一样高，不会出现台阶。
+  gap 比通用按钮小一档：横排之后每颗按钮的宽度只有原来的一半左右。
+*/
 .button--choice {
   width: 100%;
+  height: 100%;
   align-items: flex-start;
-  background-color: rgba(13, 18, 27, 0.82);
+  gap: 10px;
+  padding: 13px 16px;
+  background-color: rgba(13, 18, 27, 0.62);
 }
 
 .button--choice:hover {
-  background-color: rgba(24, 33, 49, 0.88);
+  background-color: rgba(24, 33, 49, 0.72);
+}
+
+/* 文案与语气标签上下叠放：横排按钮没有多余的横向空间放第二列。 */
+.button__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.button__text {
+  /* 折行是允许的，但只在词与标点之间折，不在半个词中间断开。 */
+  overflow-wrap: break-word;
 }
 
 .button__label {
-  flex: none;
-  margin-left: auto;
-  align-self: center;
   font-family: var(--font-mono);
   font-size: 0.72rem;
   letter-spacing: 0.08em;
@@ -727,7 +859,7 @@ img {
 .button__index {
   flex: none;
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--color-text-faint);
   padding-top: 2px;
 }
@@ -880,51 +1012,53 @@ img {
 }
 
 /*
-  全局静音／恢复声音。
+  两个音频通道开关（A01 建立，A03 拆成 BGM / SFX 两个，V03 拆出两种定位）。
 
-  由 App 渲染一次并固定在右上角：StartPage、GamePage、EndingPage 上位置完全一致，
-  不随页面结构变化跳动。它在剧情舞台之外，点击不会冒泡到 GamePage 的阅读推进热区。
-
-  只有图标，可见文字为零，名称完全由 aria-label 承担。
-*/
-/*
-  两个音频通道开关（A01 建立，A03 试玩修订拆成 BGM / SFX 两个）。
-
-  固定在右上角的一个容器里，因此三个页面上的位置完全一致。
   容器负责定位，按钮自身只管自己的形状 —— 这样以后加第三个控件也不会再动定位。
+  两种定位：开始页与结局页仍然悬浮在右上角；剧情页把这一组排进顶栏，
+  由顶栏的 flex 负责位置，容器自己不定位。
 */
 .audio-toggles {
+  display: flex;
+  align-items: center;
+  /* 8px 而不是 6：移动端两颗按钮各自向外扩 4px 的触摸区，正好相接不重叠。 */
+  gap: 8px;
+}
+
+.audio-toggles--floating {
   position: fixed;
   top: max(12px, env(safe-area-inset-top));
   right: max(12px, env(safe-area-inset-right));
   z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
+/*
+  顶栏上的三个胶囊开关共用同一个外形（V03 试玩修订）。
+
+  自动播放、音乐、音效在剧情页顶栏里并排出现，原来却是两种控件：
+  自动播放是一颗 27px 的窄胶囊，两个音频开关是 44px 高、带底色状态块的大胶囊，
+  并排看过去像误拼在一起的两套 UI。现在尺寸、圆角、字号、字距、底色和描边
+  全部由这一条规则统一给出，只有各自的状态色写在下面。
+
+  高度不再靠 min-height 撑到 44px：那是这三颗按钮里最显眼的差异来源。
+  触摸目标改由移动端断点上的透明 ::after 扩出去（与自动播放同一套写法），
+  胶囊本身保持小尺寸，顶栏也就不会被撑高。
+*/
+.autoplay-toggle,
 .audio-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  /*
-    触摸目标（docs/03 §10）：高度直接给到 44px，宽度靠内容撑开并保证不低于 44px。
-    A01 时代这里是一个 40×40 的纯图标按钮，移动端另有一条把它撑到 44×44 的规则；
-    A03 加上通道名与状态字之后，那条固定宽度会把文字压出按钮外，所以已经删掉 ——
-    最小尺寸现在由这里的 min-height / min-width 一处保证，桌面与移动端一致。
-  */
-  min-height: 44px;
-  min-width: 44px;
-  justify-content: center;
-  padding: 0 8px;
+  gap: 8px;
+  padding: 5px 10px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
-  background-color: rgba(10, 14, 21, 0.72);
+  background-color: rgba(10, 14, 21, 0.55);
   color: var(--color-text-faint);
+  font: inherit;
   font-family: var(--font-mono);
-  font-size: 0.64rem;
-  letter-spacing: 0.02em;
-  line-height: 1;
+  font-size: var(--font-size-label);
+  letter-spacing: 0.1em;
+  line-height: 1.4;
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -933,16 +1067,46 @@ img {
     background-color var(--transition-fast);
 }
 
+.autoplay-toggle:hover,
 .audio-toggle:hover {
   border-color: rgba(157, 187, 255, 0.4);
   color: var(--color-text-muted);
 }
 
+.autoplay-toggle:focus-visible,
 .audio-toggle:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 3px;
 }
 
+/*
+  状态字（开／关）是主要的状态表达，不是装饰。
+
+  三颗按钮共用同一条规则：开着时状态字用强调色、整颗按钮的描边提亮，
+  关着时整颗按钮回到最暗的一档。刻意不给状态字加底色块 ——
+  一个 6px 见方的小色块在胶囊里显得脏，而且自动播放那颗没有，
+  并排就更像两套控件。
+*/
+.autoplay-toggle__state,
+.audio-toggle__state {
+  flex: none;
+  min-width: 1.2em;
+  text-align: center;
+  color: var(--color-text-faint);
+}
+
+.autoplay-toggle[aria-pressed='true'],
+.audio-toggle[aria-pressed='true'] {
+  border-color: rgba(157, 187, 255, 0.45);
+  color: var(--color-text-muted);
+}
+
+.autoplay-toggle[aria-pressed='true'] .autoplay-toggle__state,
+.audio-toggle[aria-pressed='true'] .audio-toggle__state {
+  color: var(--color-accent);
+}
+
+/* 图标只区分「这是哪个通道」，不表达开关状态：关掉时随整颗按钮一起变暗。 */
 .audio-toggle__icon {
   flex: none;
   opacity: 0.85;
@@ -952,30 +1116,10 @@ img {
   flex: none;
 }
 
-/*
-  状态字是主要的状态表达，不是装饰：图标在这个尺寸下只用来区分通道。
-  开着时用中性色，关掉时用提示色 —— 关闭是一个「正在生效的限制」。
-*/
-.audio-toggle__state {
-  flex: none;
-  padding: 1px 3px;
-  border-radius: 4px;
-  background-color: rgba(157, 187, 255, 0.12);
-  color: var(--color-text-muted);
-}
-
-.audio-toggle[aria-pressed='false'] {
-  border-color: rgba(216, 181, 109, 0.45);
-  color: var(--color-warning);
-}
-
-.audio-toggle[aria-pressed='false'] .audio-toggle__state {
-  background-color: rgba(216, 181, 109, 0.16);
-  color: var(--color-warning);
-}
-
-.audio-toggle[aria-pressed='false'] .audio-toggle__icon {
-  opacity: 0.5;
+/* 通道名与图标之间不需要 0.1em 的字距，那是给「开／关」和标签留的。 */
+.audio-toggle {
+  gap: 6px;
+  letter-spacing: 0.06em;
 }
 
 /* ---------- StartPage ---------- */
@@ -1138,125 +1282,113 @@ img {
   padding-bottom: 28px;
 }
 
-.game__layout {
+/*
+  舞台（V03）：先上下切，再左右分。
+
+  第一层是列向 flex —— 顶栏一条，下面是两列区。顶栏横跨整个宽度，
+  所以标题与开关不再被塞进左列、也不再需要给悬浮控件让位。
+  min-height: 0 一路往下传，保证最里面的阅读区能真正收缩并出现滚动条。
+*/
+.game__stage {
   width: 100%;
   max-width: var(--max-stage-width);
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/*
+  顶栏：左边章节标记与标题，右边进度与全部开关。
+
+  高度由内容决定（开关是 44px 的触摸目标），舞台是固定高度，
+  所以顶栏多占的那一点会从阅读区里扣掉 —— 这正是 flex: none 的作用：
+  顶栏永远完整显示，被压缩的只能是可滚动的阅读区。
+*/
+.game__topbar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.game__topbar-lead {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.game__topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+
+.game__layout {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
   /*
-    阅读区约 680–760px、状态面板 260–296px（docs/04 §5.2）。
+    阅读区约 680–760px、状态面板 260–300px（docs/04 §5.2）。
 
     面板宽度用 clamp 让它在中等宽度先让步：1024px 下实测正文列 693px、面板 260px，
     两边都还在规格区间内，不会出现「面板占住 300px、正文被挤到 650」的拥挤感。
   */
-  grid-template-columns: minmax(0, 1fr) clamp(260px, 22vw, 296px);
-  gap: clamp(24px, 3vw, 36px);
-  align-items: start;
-}
-
-.game__main {
-  min-width: 0;
-  min-height: 0;
-  /* 状态面板保持内容高度，剧情列撑满整行。 */
-  align-self: stretch;
-  max-width: var(--max-reading-width);
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.game__header {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 16px;
-  justify-content: space-between;
-  align-items: baseline;
-  border-bottom: 1px solid var(--color-border);
-  padding-bottom: 12px;
-}
-
-.game__header-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 16px;
-}
-
-.game__progress {
-  font-family: var(--font-mono);
-  font-size: var(--font-size-label);
-  letter-spacing: 0.08em;
-  color: var(--color-text-faint);
+  grid-template-columns: minmax(0, 1fr) clamp(260px, 22vw, 300px);
+  gap: clamp(20px, 2.6vw, 32px);
+  align-items: stretch;
 }
 
 /*
-  自动播放开关。
+  左列的剧情面板（V03）。
 
-  在章节头部这一行，不在剧情滚动容器里，因此不会随正文滚走，
-  也不会挡住滚动条或选项。默认关闭，状态直接写成「开／关」，不用播放三角。
+  这块 .panel 就是玩家看到的那张半透明底，阅读区与交互区都在它内部，
+  因此滚动条也在里面 —— 原来阅读区自己是面板、交互区在面板外，
+  滚动条贴着面板外沿，选项看起来像掉在面板下面的一排零件。
+
+  左右内边距刻意不对称：右边只留 14px，剩下的间距由阅读区与交互区
+  各自的 padding-right 补齐（14 + 12 = 26，与左边的 26px 对齐）。
+  这样滚动条落在面板内侧靠边的位置，而文字与按钮的右边缘仍与左边缘对称。
 */
-.autoplay-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background-color: rgba(10, 14, 21, 0.55);
-  color: var(--color-text-faint);
-  font: inherit;
-  font-family: var(--font-mono);
-  font-size: var(--font-size-label);
-  letter-spacing: 0.1em;
-  line-height: 1.4;
-  cursor: pointer;
-  transition:
-    border-color var(--transition-fast),
-    color var(--transition-fast),
-    background-color var(--transition-fast);
+.game__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px 14px 22px 26px;
+  background-color: var(--color-panel-reading);
 }
 
-.autoplay-toggle:hover {
-  border-color: rgba(157, 187, 255, 0.4);
-  color: var(--color-text-muted);
-}
-
-.autoplay-toggle:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 3px;
-}
-
-.autoplay-toggle__state {
-  min-width: 1.2em;
-  text-align: center;
-  color: var(--color-text-faint);
-}
-
-.autoplay-toggle[aria-pressed='true'] {
-  border-color: rgba(157, 187, 255, 0.45);
-  color: var(--color-text-muted);
-}
-
-.autoplay-toggle[aria-pressed='true'] .autoplay-toggle__state {
-  color: var(--color-accent);
-}
+/*
+  自动播放开关的外形与两个音频开关完全一致，共用同一条规则
+  （见上面的「顶栏上的三个胶囊开关」）。默认关闭，状态直接写成「开／关」，
+  不用播放三角。它在顶栏这一行，不在剧情滚动容器里，因此不会随正文滚走。
+*/
 
 .game__title {
-  font-size: clamp(1.35rem, 3.4vw, 1.75rem);
+  font-size: clamp(1.2rem, 2.6vw, 1.5rem);
   font-weight: 500;
   letter-spacing: 0.02em;
-  line-height: 1.35;
+  line-height: 1.3;
 }
 
 /*
   剧情阅读区：唯一的滚动容器。
 
-  占满剧情列的剩余高度，内容超出后在自己内部出现纵向滚动条；
-  overscroll-behavior 阻止滚到头时把滚动传给页面。
+  V03 起它不再是面板本身，只是面板内部的一块滚动区：没有底色、没有边框，
+  半透明底由外面的 .game__main 提供。内容超出时滚动条出现在这块区域的右缘，
+  也就是面板内侧，不会贴着面板外沿。
+  overscroll-behavior 阻止滚到头时把滚动传给页面；
   min-height 保证极端情况下正文仍有一块可读区域。
 
-  比通用面板更不透明：正文是全篇阅读时间最长的区域，
-  这里不让背景图参与对比度计算（V01 / V02）。
+  scrollbar-gutter: stable 预留滚动条的位置，正文不会在滚动条出现的那一刻
+  横向跳一下 —— 逐字揭示时内容高度一直在长，这个跳动会很显眼。
 */
 .game__text {
   /* 逐字块里的 .sr-only 完整文本层跟着滚动内容走，不跑到容器外面。 */
@@ -1266,11 +1398,26 @@ img {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 26px 28px;
-  background-color: var(--color-panel-reading);
+  padding-right: 12px;
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  /*
+    尺寸包含：正文的高度不参与任何固有尺寸计算。
+
+    没有它的话，面板（.game__main）作为 flex／grid 项的自动最小尺寸会把
+    整段正文的高度算进去 —— 那是几百上千像素，固定舞台会被整段撑破。
+    于是原来的写法是给面板 min-height: 0，让它可以无限压缩；代价是屏幕很矮时
+    面板被压得比自己的内容还短，正文与选项直接漏在面板外面。
+
+    contain: size 之后，正文对固有尺寸的贡献只剩下面这条 min-height，
+    面板的最小高度就等于「最小阅读区 + 交互区 + 内边距」这个确定的值：
+    正常情况下面板照样按剩余高度伸缩，屏幕矮到装不下时面板完整地长出来，
+    由 .screen--game 的 overflow-y 承接滚动（那正是它存在的意义）。
+    正文自己的高度始终由 flex 决定，从来不看内容，所以加上它不改变任何正常布局。
+  */
+  contain: size;
   /* 阅读区域整体可点推进：不要 300ms 点击延迟，也不要双击缩放。 */
   touch-action: manipulation;
   scrollbar-width: thin;
@@ -1292,9 +1439,11 @@ img {
   background-color: rgba(148, 163, 184, 0.55);
 }
 
+/* offset 收成负值：阅读区现在贴在面板内壁，正向偏移会把描边画到面板外面。 */
 .game__text:focus-visible {
   outline: 2px solid var(--color-accent);
-  outline-offset: 3px;
+  outline-offset: -2px;
+  border-radius: 6px;
 }
 
 /* 正文播放中的提示，安静、不抢正文；和选项互斥出现，所以不会叠加高度。 */
@@ -1305,22 +1454,58 @@ img {
   color: var(--color-text-faint);
 }
 
-/* 交互区在剧情滚动容器之外，不参与正文滚动，也不会盖住滚动条。 */
+/*
+  交互区：在剧情滚动容器之外、但仍在面板内部。
+
+  padding-right 与阅读区一致，让选项、继续按钮和正文的右边缘对齐
+  （见 .game__main 关于左右内边距不对称的说明）。
+*/
 .game__interactions {
   flex: none;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding-right: 12px;
 }
 
 .game__interactions:empty {
   display: none;
 }
 
+/*
+  选项网格（V03）。
+
+  原来是竖着堆叠的一列，四条正式选项会占掉阅读区一大截高度，
+  而且每条按钮宽度都是满行，文案短的时候右边全是空白。
+  改成网格之后：
+
+  - 列数由 ChoiceList 报出的 `data-count` 决定，组件不算宽度、不判断断点；
+  - 正式剧情固定四条 → 2×2。四条里最长的一条有 26 个汉字，
+    横排四列每列只剩约 170px，必然折成三行，所以不排一行；
+  - grid-auto-rows: 1fr 让所有行等高，两行四颗按钮尺寸完全一致，
+    文案长短不同也不会出现高低不齐的台阶；
+  - 单颗按钮内部允许折行（见 .button--choice / .button__text）。
+*/
 .game__choices {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
   gap: 10px;
+}
+
+/* 一条时独占整行；三条时并成一排，每条仍然等宽等高。 */
+.game__choices[data-count='1'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.game__choices[data-count='3'] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* li 只是网格单元的壳，按钮撑满它，等高才落到按钮本身上。 */
+.game__choices > li {
+  display: flex;
+  min-width: 0;
 }
 
 .game__continue {
@@ -1543,29 +1728,43 @@ img {
 }
 
 /* 第四章的失控段落只做轻微压暗与暖边，不做闪烁、不做大面积红。 */
-.screen--game[data-mode='control'] .game__text {
+.screen--game[data-mode='control'] .game__main {
   border-color: rgba(216, 181, 109, 0.24);
 }
 
-.screen--game[data-mode='control'] .game__header {
+.screen--game[data-mode='control'] .game__topbar {
   border-bottom-color: rgba(216, 181, 109, 0.24);
 }
 
 /* ---------- AI 状态面板 ---------- */
 
+/*
+  桌面端排版对齐 design/ui-mockups/ui-game-desktop.webp：
+  每一行是「图标 + 中文标签 / 英文副标」在左、状态文案在右。
+  面板保持内容高度（align-self: start），不去凑左列的高度 ——
+  只有四条状态，硬撑满整列会留下一大片假的空白。
+*/
 .status {
-  padding: 20px;
+  align-self: start;
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+}
+
+/* 标题与运行提示同一行：面板只有 260–300px，两行标题太浪费。 */
+.status__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .status__title {
-  font-family: var(--font-mono);
-  font-size: var(--font-size-label);
+  font-size: 0.92rem;
   font-weight: 500;
-  letter-spacing: var(--letter-spacing-label);
-  color: var(--color-text-faint);
+  letter-spacing: 0.08em;
+  color: var(--color-text);
 }
 
 .status__list {
@@ -1577,32 +1776,88 @@ img {
 
 .status__item {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 9px 0;
+  gap: 10px;
+  padding: 10px 0;
   border-top: 1px solid var(--color-border);
-  font-size: 0.9rem;
-  line-height: 1.5;
+  line-height: 1.35;
 }
 
-.status__item dt {
+.status__term {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/*
+  图标只区分「这是哪一项」，不表达数值高低，也不承担任何状态语义 ——
+  状态永远由右边那四个字表达。移动端隐藏，见 768px 断点。
+*/
+.status__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background-color: rgba(157, 187, 255, 0.06);
+  color: var(--color-accent);
+}
+
+.status__label {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.status__label-zh {
+  font-size: 0.86rem;
+  letter-spacing: 0.04em;
+  color: var(--color-text);
+}
+
+.status__label-en {
   font-family: var(--font-mono);
-  font-size: 0.78rem;
-  letter-spacing: 0.06em;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+.status__value {
+  flex: none;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+  text-align: right;
+  /* 文案统一收在四个汉字以内（utils/aiStatus.ts），这里不需要为折行留余地。 */
+  white-space: nowrap;
+}
+
+/* 提示语前的那颗点：表示面板在实时跟随，不是一张静态卡片。 */
+.status__hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
   color: var(--color-text-faint);
   white-space: nowrap;
 }
 
-.status__item dd {
-  color: var(--color-text-muted);
-  text-align: right;
-}
-
-.status__hint {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.1em;
-  color: var(--color-text-faint);
+.status__hint::before {
+  content: '';
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background-color: var(--color-accent);
+  box-shadow: 0 0 6px rgba(157, 187, 255, 0.7);
 }
 
 /* control 模式只改边框和提示语颜色，不加红块、不闪烁。 */
@@ -1610,8 +1865,18 @@ img {
   border-color: rgba(216, 181, 109, 0.32);
 }
 
-.status[data-mode='control'] .status__title,
 .status[data-mode='control'] .status__hint {
+  color: var(--color-warning);
+}
+
+.status[data-mode='control'] .status__hint::before {
+  background-color: var(--color-warning);
+  box-shadow: 0 0 6px rgba(216, 181, 109, 0.7);
+}
+
+.status[data-mode='control'] .status__icon {
+  border-color: rgba(216, 181, 109, 0.32);
+  background-color: rgba(216, 181, 109, 0.07);
   color: var(--color-warning);
 }
 
@@ -1626,28 +1891,53 @@ img {
 
 /* ---------- EndingPage ---------- */
 
-.ending__inner {
+/*
+  结局页舞台（V03，对齐 design/ui-mockups/ui-ending-desktop.webp）。
+
+  一屏三块：标题区 → 左右并排的两块文本 → 一条矮的状态摘要（再下面是按钮）。
+  和剧情页同一套做法：舞台是确定高度，两块文本各自内部滚动，
+  整页不随文本长度变高 —— 状态摘要和「重新初始化」始终在视野里，
+  玩家不必翻到底才能重来一次。
+
+  屏幕装不下时退化成这一层滚动（overflow-y），与 .screen--game 一致。
+*/
+.screen--ending {
+  flex: none;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  align-items: stretch;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-top: 28px;
+  padding-bottom: 24px;
+}
+
+.ending__stage {
   width: 100%;
-  max-width: var(--max-content-width);
+  max-width: var(--max-stage-width);
+  min-height: 0;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-section);
+  gap: 14px;
 }
 
 .ending__header {
+  flex: none;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   text-align: center;
-  padding: 8px 0 4px;
+  padding: 2px 0 6px;
 }
 
 .ending__title {
-  font-size: clamp(1.7rem, 5vw, 2.4rem);
+  font-size: clamp(1.7rem, 4.4vw, 2.4rem);
   font-weight: 500;
   letter-spacing: 0.06em;
-  line-height: 1.3;
+  line-height: 1.25;
 }
 
 .ending__description {
@@ -1655,24 +1945,109 @@ img {
   color: var(--color-text-muted);
 }
 
-.ending__body {
-  padding: 28px;
+/*
+  两块文本。
+
+  等宽两列 —— 结局正文与镜像报告是同等重量的两段收尾，没有主次之分。
+  这一行吃掉标题、状态摘要与按钮之外的全部剩余高度。
+*/
+.ending__columns {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(14px, 1.8vw, 22px);
+  align-items: stretch;
+}
+
+.ending__panel {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* 右边少留一些，剩下的由 .ending__scroll 的 padding-right 补齐（16 + 10 = 26）。 */
+  padding: 20px 16px 20px 26px;
+}
+
+.ending__panel-title {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  font-weight: 500;
+  letter-spacing: var(--letter-spacing-label);
+  color: var(--color-text-faint);
+}
+
+/*
+  面板内部的滚动区。
+
+  contain: size 的作用与剧情页的 .game__text 完全一样：让面板作为
+  grid 项的自动最小高度不把整段正文算进去，否则舞台会被撑破。
+  见 .game__text 处那段更长的说明。
+*/
+.ending__scroll {
+  flex: 1 1 auto;
+  min-height: 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-right: 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  contain: size;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+.ending__scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+.ending__scroll::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: rgba(148, 163, 184, 0.35);
+}
+
+.ending__scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, 0.55);
 }
 
 /* 结尾句：单独一段，比正文更安静。 */
 .ending__final {
-  padding: 4px 2px 8px;
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
   color: var(--color-text-muted);
 }
 
-.report {
+/* 报告开头那几行「生成时间 / 会话时长」式的记录，比正文更像系统输出。 */
+.report__lines {
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* ---------- 结局页状态摘要 ---------- */
+
+/*
+  一条矮带，四项平铺。
+
+  刻意压得比 mock 里更矮：这一版的结局正文与镜像报告都比 mock 里长得多，
+  高度优先给上面那两块文本。所以这里没有大标题、没有留白很足的卡片，
+  只有一行小标题加一排四格。
+*/
+.stat-summary {
+  flex: none;
+  padding: 12px 18px 14px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  color: var(--color-text-muted);
+  gap: 8px;
 }
 
-.report__title {
+.stat-summary__title {
   font-family: var(--font-mono);
   font-size: var(--font-size-label);
   font-weight: 500;
@@ -1680,56 +2055,168 @@ img {
   color: var(--color-text-faint);
 }
 
-.ending__inner .button {
-  align-self: center;
-  margin-top: 4px;
-  min-width: 220px;
+.stat-summary__list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px 0;
 }
 
-/* 开发验证区：临时区块，正式结局报告实现后会连同标记一起移除。 */
-.dev-summary {
+/* 竖细线分隔四格，比给每格加边框更安静。 */
+.stat-summary__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 16px;
+  border-left: 1px solid var(--color-border);
+}
+
+.stat-summary__item:first-child {
+  border-left: none;
+  padding-left: 0;
+}
+
+.stat-summary__term {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.stat-summary__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background-color: rgba(157, 187, 255, 0.06);
+  color: var(--color-accent);
+}
+
+.stat-summary__label {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  border-style: dashed;
-  box-shadow: none;
-  font-size: 0.9rem;
-  color: var(--color-text-muted);
+  gap: 1px;
 }
 
-.dev-summary__title {
+.stat-summary__label-zh {
+  font-size: 0.86rem;
+  letter-spacing: 0.04em;
+  color: var(--color-text);
+}
+
+.stat-summary__label-en {
   font-family: var(--font-mono);
-  font-size: var(--font-size-label);
-  font-weight: 500;
-  letter-spacing: var(--letter-spacing-label);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+.stat-summary__value {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+
+/* 档位点：画的是「第几档」，不是变量值（见 EndingStatSummary 的说明）。 */
+.stat-summary__dots {
+  display: flex;
+  gap: 4px;
+}
+
+.stat-summary__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background-color: rgba(148, 163, 184, 0.28);
+}
+
+.stat-summary__dot[data-on='true'] {
+  background-color: var(--color-accent);
+  box-shadow: 0 0 5px rgba(157, 187, 255, 0.55);
+}
+
+.stat-summary__text {
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* ---------- 结局页操作区 ---------- */
+
+.ending__actions {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.ending__action {
+  justify-content: center;
+  gap: 10px;
+  min-width: 216px;
+}
+
+.ending__action svg {
+  flex: none;
+}
+
+/*
+  按钮下面那一行。
+
+  平时是「开启一段新的对话」这句提示，复制成功或失败时换成对应的反馈。
+  同一个 aria-live 区域，同一个位置 —— 反馈出现时不会把按钮顶上去。
+*/
+.ending__feedback {
+  flex: none;
+  min-height: 1.4em;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: var(--color-text-faint);
+  transition: color var(--transition-fast);
+}
+
+.ending__feedback[data-state='copied'] {
+  color: var(--color-accent);
+}
+
+.ending__feedback[data-state='failed'] {
   color: var(--color-warning);
 }
 
-.dev-summary__line {
-  line-height: 1.6;
+/* 剪贴板不可用时的手动复制框（docs/03 §6.3）。 */
+.ending__fallback {
+  flex: none;
+  display: block;
 }
 
-.dev-summary__path {
-  margin: 0;
-  padding-left: 20px;
-  line-height: 1.6;
-}
-
-.dev-summary__mono {
+.ending__fallback-field {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid rgba(216, 181, 109, 0.4);
+  border-radius: var(--radius-card);
+  background-color: rgba(6, 9, 14, 0.72);
+  color: var(--color-text-muted);
   font-family: var(--font-mono);
-  font-size: 0.85em;
-  color: var(--color-text-faint);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  resize: vertical;
 }
 
-.dev-summary__stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 20px;
-}
-
-.dev-summary__stat {
-  display: flex;
-  gap: 8px;
+.ending__fallback-field:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 /* ---------- 数据错误兜底页 ---------- */
@@ -1818,18 +2305,23 @@ img {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 20px;
+    gap: 16px;
   }
 
   .game__main {
-    max-width: none;
     order: 2;
     flex: 1 1 auto;
   }
 
+  /*
+    状态面板回到剧情之上，并且必须显式改回 stretch：
+    基础规则里的 align-self: start 在列向 flex 下会让它缩成内容宽度，
+    看起来像一张漏排的窄卡片。
+  */
   .status {
     order: 1;
     flex: none;
+    align-self: stretch;
   }
 
   /* 单列布局下面板改成紧凑卡片：两列状态项，不抢首屏高度。 */
@@ -1839,55 +2331,22 @@ img {
     column-gap: 16px;
   }
 
-  .status__item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-    padding: 8px 0;
-  }
-
-  .status__item dd {
+  .status__value {
     text-align: left;
-  }
-
-  /*
-    给右上角的两个音频开关让位（A01 建立，A03 拆成两个后加宽）。
-
-    只有单列布局需要：两列时剧情列被 --max-reading-width 卡在 720px，
-    右边缘离视口右上角还有一大截，开关落在空白里什么都不挡。
-    单列后章节头铺满舞台，进度与自动播放开关就会顶到音频开关下面。
-    138px = 两个开关约 118 + 视口边距 12 之外再留一点余量；
-    章节头本来就是 flex-wrap，让位后最多多折一行，不会挤压正文区的固定高度。
-
-    让位只给真正落在开关下面的那一行。状态面板不整卡收内边距：
-    那会连带压窄下面的状态项网格，320px 下有两组文字会折行，
-    面板高度涨 18px，直接从本来就不多的正文高度里扣（I01 的固定舞台）。
-  */
-  .game__header {
-    padding-right: 168px;
   }
 }
 
 /*
   很窄的屏幕上收掉通道名，只留图标与「开／关」（A03）。
 
-  两个带名字的开关约 168px，在 320px 上会把章节头压得只剩一半。
-  收掉名字之后每个开关约 52px，让位降到 116px，章节头仍然放得下进度与自动播放。
+  两个带名字的开关约 168px，在 320px 的顶栏里会把标题挤到只剩一半。
+  收掉名字之后每个开关约 52px，顶栏仍然放得下标题、自动播放与两个音频开关。
   语义没有损失：状态仍然是可见文字（要求是「不只依赖图标表达状态」），
   完整的通道名留在 aria-label 与 title 里，屏幕阅读器和长按提示都读得到。
 */
 @media (max-width: 520px) {
   .audio-toggle__name {
     display: none;
-  }
-
-  .game__header {
-    padding-right: 116px;
-  }
-
-  /* 开关变窄了，状态带的让位也跟着收回来，别白白吃掉提示语的宽度。 */
-  .status__hint {
-    padding-right: 124px;
   }
 }
 
@@ -1896,7 +2355,7 @@ img {
     /* 移动端正文回到 16px：再小就不适合长时间阅读。 */
     --font-size-reading: 1rem;
     --line-height-reading: 1.8;
-    --radius-panel: 18px;
+    --radius-panel: 10px;
     --space-block: 16px;
     --space-section: 16px;
   }
@@ -1929,26 +2388,61 @@ img {
     gap: 36px;
   }
 
-  .game__layout {
-    gap: 14px;
+  .game__stage {
+    gap: 12px;
   }
 
-  .game__main {
+  .game__layout {
     gap: 12px;
   }
 
   /*
-    开关紧挨着大片推进热区，窄屏下把点击目标放大一点，减少误触。
+    移动端顶栏收成一行：章节标记（CHAPTER 01 / …）让位，只留标题与开关。
+    参考 design/ui-mockups/ui-game-mobile.webp —— 手机上顶部就是一条
+    「标题 + 少量控件」的窄栏，多一行英文标记只会吃掉正文高度。
+  */
+  .game__phase {
+    display: none;
+  }
+
+  .game__topbar {
+    gap: 6px 10px;
+    padding-bottom: 10px;
+  }
+
+  .game__topbar-actions {
+    gap: 6px 8px;
+  }
+
+  /*
+    窄屏选项回到单列（对齐 design/ui-mockups/ui-game-mobile.webp）。
+
+    375px 下 2×2 每颗按钮只有约 150px 宽，最长的一条选项（26 个汉字）会折成
+    四五行 —— 一行只剩九个字，读起来比竖排更费劲。单列时每行约 16 个字、
+    最多两行，四条加起来只多占七十来像素。
+    横排是桌面端的事：那里每颗按钮有 340px，两行就放得下最长的一条。
+  */
+  .game__choices,
+  .game__choices[data-count='3'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /*
+    三个开关紧挨着大片推进热区，窄屏下把点击目标放大一点，减少误触。
 
     ::after 只把可点区域撑到 44px 以上，胶囊本身保持小尺寸：
-    直接加高会把章节头撑开，抢走本来就不多的正文高度（I01 的固定舞台）。
+    直接加高会把顶栏撑开，抢走本来就不多的正文高度（I01 的固定舞台）。
+    音频开关原来是靠 min-height: 44px 直接长高的，V03 统一外形之后
+    改成和自动播放同一套写法，三颗按钮在顶栏里高度一致。
   */
-  .autoplay-toggle {
+  .autoplay-toggle,
+  .audio-toggle {
     position: relative;
     padding: 9px 12px;
   }
 
-  .autoplay-toggle::after {
+  .autoplay-toggle::after,
+  .audio-toggle::after {
     content: '';
     position: absolute;
     inset: -5px -4px;
@@ -1970,29 +2464,103 @@ img {
 
   /*
     剧情页同理：单列布局下没有「左边读字、右边看图」，
-    横向渐变只会让右边缘的进度与开关落在偏亮的底上，改成竖向均匀压暗。
+    横向渐变只会让右边缘的开关落在偏亮的底上，改成竖向均匀压暗。
+
+    强度跟着桌面端一起松了一档（原 0.86 / 0.74 / 0.84）：窄屏上图片本身
+    已经压到 0.55 不透明，遮罩再按原值叠，面板底下就是一块纯黑，
+    毛玻璃完全看不出来。
   */
   .scene[data-surface='game'] .scene__scrim {
     background-image: linear-gradient(
       180deg,
-      rgba(5, 8, 12, 0.86) 0%,
-      rgba(5, 8, 12, 0.74) 38%,
-      rgba(5, 8, 12, 0.84) 100%
+      rgba(5, 8, 12, 0.7) 0%,
+      rgba(5, 8, 12, 0.54) 38%,
+      rgba(5, 8, 12, 0.68) 100%
     );
   }
 
-  /* 顺序要求：.game__text / .ending__body / .status 都带 .panel 类，
+  /* 顺序要求：.game__main / .ending__panel / .status 都带 .panel 类，
      同为单类选择器，必须写在 .panel 之后才能覆盖它的内边距。 */
   .panel {
     padding: 18px;
   }
 
-  .game__text {
-    padding: 18px 16px;
+  /* 与桌面同一套「右边少留、由内部 padding 补齐」的算法，只是数值更紧。 */
+  .game__main {
+    gap: 12px;
+    padding: 16px 8px 16px 16px;
   }
 
-  .ending__body {
-    padding: 20px 18px;
+  .game__text,
+  .game__interactions {
+    padding-right: 8px;
+  }
+
+  /*
+    结局页窄屏放弃「一屏三块」，改回一条正常滚动的长页
+    （对齐 design/ui-mockups/ui-ending-mobile.webp）。
+
+    桌面端两块文本并排、各自内部滚动，是因为横向有的是空间、竖向没有。
+    375px 上两件事同时不成立：并排每列只剩约 160px，上下排又只分到 144px 的
+    可读高度 —— 两段收尾都被压成一条缝，读三行就要滚一次。
+
+    所以这里把固定舞台整个解除：高度交回内容，内部滚动区拆掉
+    （contain 与 overflow 一起还原，两者是一套的），由页面自己滚。
+    状态摘要与按钮跟着排在正文下面，跟手机上读长文的习惯一致。
+  */
+  .screen--ending {
+    flex: 1;
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .ending__stage {
+    gap: 12px;
+  }
+
+  .ending__columns {
+    flex: none;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .ending__panel {
+    gap: 10px;
+    padding: 16px;
+  }
+
+  .ending__scroll {
+    flex: none;
+    min-height: 0;
+    padding-right: 0;
+    overflow: visible;
+    contain: none;
+    scrollbar-gutter: auto;
+  }
+
+  /* 四格一行在窄屏里放不下，改成 2×2。 */
+  .stat-summary {
+    padding: 12px 14px;
+  }
+
+  .stat-summary__list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px 0;
+  }
+
+  .stat-summary__item {
+    padding: 6px 12px;
+  }
+
+  /* 单列换行后，每行第一格都要去掉竖线，否则第三格左边会多一道。 */
+  .stat-summary__item:nth-child(odd) {
+    border-left: none;
+    padding-left: 0;
+  }
+
+  .ending__actions {
+    flex-direction: column;
   }
 
   /*
@@ -2001,33 +2569,35 @@ img {
     标题与提示语并到同一行，四个状态项各自「标签 + 状态」同行，
     整体高度约为原来的一半 —— 窄屏上正文高度本来就紧，
     面板不能先吃掉首屏（docs/04 §9）。
+
+    V03 起顶栏收走了原来悬浮在右上角的音频开关，所以这一带不再需要
+    给任何悬浮控件让出 padding，提示语可以一直排到面板右缘。
   */
   .status {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: baseline;
-    justify-content: space-between;
     padding: 12px 16px;
-    gap: 8px 12px;
+    gap: 8px;
+  }
+
+  .status__head {
+    align-items: center;
+  }
+
+  .status__title {
+    font-size: 0.82rem;
   }
 
   /*
-    横向状态带里唯一可能贴到右上角的是提示语（order: 2，与标题同一行时靠右）。
-    只让它自己收一格，状态项那一行仍然是满宽，不会被挤到折行。
-    提示语被挤到第二行时这段内边距只是尾部留白，不产生任何影响。
+    图标与英文副标只在桌面出现。
 
-    A03 把一个音频开关拆成两个之后，右上角占的宽度从 52px 涨到约 172px
-    （两个带名字的开关 160 + 视口边距 12），这里跟着放宽。
-    数字仍然只服务于「提示语不要钻到开关底下」这一件事；
-    很窄的屏幕上开关会收掉通道名，让位也随之变窄，见下面的 520px 断点。
+    窄屏上这一带的高度直接从正文高度里扣：一行 26px 的图标会把四条状态
+    撑高一截，而它们本来就不表达状态 —— 状态永远是右边那四个字。
   */
-  .status__hint {
-    padding-right: 150px;
-    order: 2;
+  .status__icon,
+  .status__label-en {
+    display: none;
   }
 
   .status__list {
-    order: 3;
     width: 100%;
     column-gap: 14px;
   }
@@ -2039,18 +2609,21 @@ img {
     flex-wrap: wrap;
     gap: 2px 8px;
     padding: 6px 0;
-    font-size: 0.82rem;
   }
 
-  .status__item dt {
+  .status__label-zh {
+    font-family: var(--font-mono);
     font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    color: var(--color-text-faint);
   }
 
-  .status__item dd {
+  .status__value {
+    font-size: 0.82rem;
     text-align: right;
   }
 
-  .ending__inner .button,
+  .ending__action,
   .error__inner .button {
     align-self: stretch;
     width: 100%;
@@ -2118,8 +2691,13 @@ img {
     padding-right: max(14px, env(safe-area-inset-right));
   }
 
-  .game__text {
-    padding: 16px 14px;
+  .game__main {
+    padding: 14px 6px 14px 14px;
+  }
+
+  .game__text,
+  .game__interactions {
+    padding-right: 8px;
   }
 
   .button {
@@ -2127,20 +2705,27 @@ img {
     gap: 10px;
   }
 
+  .button--choice {
+    padding: 11px 12px;
+  }
+
   /*
     320px 下状态项仍然「标签 + 状态」同行，但字号再收一档。
 
-    单元格只有约 123px，按 768 断点的字号最长的两组会折行，
-    面板高度从 164px 涨回 191px —— 在 640px 高的屏上这一下就吃掉 4% 首屏。
-    收到 0.68 / 0.78rem 后实测最长的一组（语气 / 保护偏向未建立）约 115px，
+    单元格只有约 123px，按 768 断点的字号最长的一组会折行，
+    面板高度会涨一截 —— 在 640px 高的屏上这一下就吃掉几个百分点的首屏。
+    状态文案在 V03 里已经统一收到四个汉字，配上这里的字号，
     四行都能单行放下。这里只影响状态标签，正文仍然是 16px。
   */
-  .status__item {
+  .status__value {
     font-size: 0.78rem;
+  }
+
+  .status__item {
     gap: 2px 6px;
   }
 
-  .status__item dt {
+  .status__label-zh {
     font-size: 0.68rem;
   }
 }

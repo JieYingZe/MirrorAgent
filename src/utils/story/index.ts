@@ -15,6 +15,10 @@ export { applyChoice, advanceToNext } from './applyChoice'
 export type { ApplyChoiceResult } from './applyChoice'
 export { getEnding, getEndingDefinition, buildEndingView } from './getEnding'
 export type { EndingResolution, EndingView } from './getEnding'
+export { logEndingSummary } from './endingSummaryLog'
+export { blocksToPlainText } from './blockText'
+export { buildEndingReportText } from './endingReportText'
+export type { EndingReportLabels } from './endingReportText'
 export {
   STORY_SAVE_KEY,
   loadStorySave,
@@ -23,7 +27,7 @@ export {
   validateStorySave,
 } from './storySave'
 export type { StorySaveLoadResult, StorySaveValidation } from './storySave'
-export { getChapterPhaseLabel, getChapterProgressLabel } from './chapterLabels'
+export { getChapterPhaseLabel } from './chapterLabels'
 export { describeNodeIssue } from './nodeIssue'
 
 /* 阅读节奏（I01）：只影响展示层，不进入 StoryState，也不写存档。 */

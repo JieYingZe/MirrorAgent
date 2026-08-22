@@ -12,9 +12,9 @@ import { StoryBlockList } from '../components/story/StoryBlockRenderer'
 import { ChoiceList } from '../components/story/ChoiceList'
 import { AutoplayToggle } from '../components/story/AutoplayToggle'
 import { AiStatusPanel } from '../components/status/AiStatusPanel'
+import { AudioToggles } from '../components/audio/AudioToggles'
 import {
   getChapterPhaseLabel,
-  getChapterProgressLabel,
   getVisibleBlocks,
   getVisibleChoices,
   nodeSequenceKey,
@@ -43,6 +43,16 @@ type GamePageProps = {
   /** 自动播放偏好。由应用层持有并持久化，节点切换不会重置。 */
   autoplayEnabled: boolean
   onAutoplayEnabledChange: (next: boolean) => void
+  /**
+   * 音频通道偏好与切换（V03）。
+   *
+   * 剧情页把两个音频开关排进顶栏，所以它需要拿到这几个值。
+   * 页面仍然只是转发：偏好的所有者是 App，这里既不持有状态也不碰播放器。
+   */
+  bgmEnabled: boolean
+  sfxEnabled: boolean
+  onBgmEnabledChange: (next: boolean) => void
+  onSfxEnabledChange: (next: boolean) => void
   onChoose: (choice: StoryChoice) => void
   onContinue: () => void
   /**
@@ -67,14 +77,14 @@ function isNonAdvancingTarget(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest(NON_ADVANCING_SELECTOR) !== null
 }
 
-/** 玩家正在选中文字时不推进，否则一次划选结束就会吃掉整页正文。 */
-function hasTextSelection(): boolean {
-  if (typeof window === 'undefined') return false
+/*
+  这里曾经有一个 hasTextSelection()：玩家正在划选文字时不推进阅读，
+  否则一次划选结束就会吃掉整页正文。
 
-  const selection = window.getSelection()
-
-  return selection !== null && !selection.isCollapsed && selection.toString().trim() !== ''
-}
+  现在整个业务层是 user-select: none（见 global.css 的 .app-shell），
+  玩家已经不可能产生选区，这个判断永远为假，所以删掉了。
+  如果以后某个区域重新允许划选，需要连同这个判断一起恢复。
+*/
 
 /** 超过这个位移就当成滚动或拖动，随后的 click 不推进。 */
 const POINTER_DRAG_THRESHOLD_PX = 10
@@ -116,9 +126,14 @@ function scrollBlockIntoContainerView(
  * 显示当前展示序列的文本块、显示可见选项、把点击交回上层。
  * 不针对具体节点 ID 编写剧情逻辑，所有分支判断都在数据和引擎里。
  *
- * 布局（I01 验收修订）：剧情阅读区是一个高度受控的独立滚动容器，
- * 交互区（继续／探索／选项）在它之外，因此正文变长只会让容器内部出现滚动条，
- * 不会把标题、状态面板和交互区推到页面下方。
+ * 布局（I01 建立，V03 改成上下结构）：舞台先横着切一条顶栏，
+ * 顶栏左边是章节标记与标题、右边是进度与全部开关（自动播放、音乐、音效）；
+ * 顶栏下面才分左右两列 —— 左列是剧情面板，右列是 AI 状态面板。
+ *
+ * 剧情面板本身是那块半透明底：阅读区与交互区（继续／选项）都在它里面，
+ * 因此滚动条也落在面板内部，不会像原来那样贴着面板外沿。
+ * 阅读区仍然是唯一高度受控的滚动容器，正文变长只在它内部滚动，
+ * 不会把顶栏、状态面板和交互区推到页面下方。
  *
  * 阅读节奏（I01）：当前 block 始终自动逐字揭示；完成后是否自动进入下一个 block
  * 由自动播放偏好决定，默认关闭。开启时一次点击直接看完当前展示序列。
@@ -134,6 +149,10 @@ export default function GamePage({
   responseKey,
   autoplayEnabled,
   onAutoplayEnabledChange,
+  bgmEnabled,
+  sfxEnabled,
+  onBgmEnabledChange,
+  onSfxEnabledChange,
   onChoose,
   onContinue,
   onReadingReveal,
@@ -213,7 +232,6 @@ export default function GamePage({
 
       if (blockedByPointer) return
       if (isNonAdvancingTarget(event.target)) return
-      if (hasTextSelection()) return
 
       advanceReading()
     },
@@ -366,93 +384,105 @@ export default function GamePage({
       onPointerDown={handleStagePointerDown}
       onPointerMove={handleStagePointerMove}
     >
-      <div className="game__layout">
-        <section className="game__main" aria-labelledby="chapter-title">
-          <header className="game__header">
-            <p className="eyebrow">{getChapterPhaseLabel(chapter)}</p>
-            <div className="game__header-actions">
-              <span className="game__progress">{getChapterProgressLabel(chapter, node)}</span>
-              <AutoplayToggle enabled={autoplayEnabled} onChange={onAutoplayEnabledChange} />
-            </div>
-          </header>
+      <div className="game__stage">
+        {/* 顶栏横跨整个舞台：标题在左，开关全部收在右边，不再悬浮在正文之上。 */}
+        <header className="game__topbar">
+          <div className="game__topbar-lead">
+            <p className="eyebrow game__phase">{getChapterPhaseLabel(chapter)}</p>
+            <h1 id="chapter-title" className="game__title">
+              {node.sectionTitle ?? chapter.title}
+            </h1>
+          </div>
 
-          <h1 id="chapter-title" className="game__title">
-            {node.sectionTitle ?? chapter.title}
-          </h1>
-
-          {/* 高度受控的独立滚动容器：正文只在这里面滚，交互区在它之外。 */}
-          <div
-            ref={readingAreaRef}
-            className="panel game__text"
-            tabIndex={0}
-            onScroll={handleReadingScroll}
-            // 玩家自己滚动的信号：滚轮、触摸拖动。
-            onWheel={markUserScrollIntent}
-            onTouchMove={markUserScrollIntent}
-          >
-            <StoryBlockList
-              blocks={nodeBlocks}
-              idPrefix={node.id}
-              className="story-blocks"
-              // 显示回应时，节点正文早已读完，保持完整显示。
-              reveal={showingResponse ? undefined : reading}
+          <div className="game__topbar-actions">
+            <AutoplayToggle enabled={autoplayEnabled} onChange={onAutoplayEnabledChange} />
+            <AudioToggles
+              variant="inline"
+              bgmEnabled={bgmEnabled}
+              sfxEnabled={sfxEnabled}
+              onBgmEnabledChange={onBgmEnabledChange}
+              onSfxEnabledChange={onSfxEnabledChange}
             />
+          </div>
+        </header>
 
-            {showingResponse && (
+        <div className="game__layout">
+          {/* 这块 panel 就是左侧的半透明底：阅读区与交互区都在它内部。 */}
+          <section className="panel game__main" aria-labelledby="chapter-title">
+            {/* 高度受控的独立滚动容器：正文只在这里面滚，滚动条落在面板内。 */}
+            <div
+              ref={readingAreaRef}
+              className="game__text"
+              tabIndex={0}
+              onScroll={handleReadingScroll}
+              // 玩家自己滚动的信号：滚轮、触摸拖动。
+              onWheel={markUserScrollIntent}
+              onTouchMove={markUserScrollIntent}
+            >
               <StoryBlockList
-                blocks={responseBlocks}
-                idPrefix={`${node.id}-response`}
-                className="story-blocks story-blocks--response"
-                reveal={reading}
+                blocks={nodeBlocks}
+                idPrefix={node.id}
+                className="story-blocks"
+                // 显示回应时，节点正文早已读完，保持完整显示。
+                reveal={showingResponse ? undefined : reading}
               />
-            )}
-          </div>
 
-          {/* 交互区整体不参与阅读推进：点选项或继续按钮不会同时快进正文。 */}
-          <div className="game__interactions" data-no-story-advance="true">
-            {!interactionsReady && (
-              <p className="game__reading-hint">
-                {autoplayEnabled ? gameContent.readingHintAutoplay : gameContent.readingHintManual}
-              </p>
-            )}
-
-            {choices.length > 0 && (
-              <div className="reading-reveal">
-                <ChoiceList
-                  choices={choices}
-                  disabled={locked}
-                  onSelect={(choice, event) => {
-                    keyboardModeRef.current = event.detail === 0
-                    withLock(() => onChoose(choice))
-                  }}
+              {showingResponse && (
+                <StoryBlockList
+                  blocks={responseBlocks}
+                  idPrefix={`${node.id}-response`}
+                  className="story-blocks story-blocks--response"
+                  reveal={reading}
                 />
-              </div>
-            )}
+              )}
+            </div>
 
-            {showContinue && (
-              <button
-                type="button"
-                className="button button--primary game__continue reading-reveal"
-                disabled={locked}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  keyboardModeRef.current = event.detail === 0
-                  withLock(onContinue)
-                }}
-              >
-                {continueLabel}
-              </button>
-            )}
-          </div>
+            {/* 交互区整体不参与阅读推进：点选项或继续按钮不会同时快进正文。 */}
+            <div className="game__interactions" data-no-story-advance="true">
+              {!interactionsReady && (
+                <p className="game__reading-hint">
+                  {autoplayEnabled ? gameContent.readingHintAutoplay : gameContent.readingHintManual}
+                </p>
+              )}
 
-          <p className="sr-only" aria-live="polite">
-            {liveMessage}
-          </p>
-        </section>
+              {choices.length > 0 && (
+                <div className="reading-reveal">
+                  <ChoiceList
+                    choices={choices}
+                    disabled={locked}
+                    onSelect={(choice, event) => {
+                      keyboardModeRef.current = event.detail === 0
+                      withLock(() => onChoose(choice))
+                    }}
+                  />
+                </div>
+              )}
 
-        {node.ui?.hideStatusPanel !== true && (
-          <AiStatusPanel stats={currentStats} mode={node.ui?.mode} />
-        )}
+              {showContinue && (
+                <button
+                  type="button"
+                  className="button button--primary game__continue reading-reveal"
+                  disabled={locked}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    keyboardModeRef.current = event.detail === 0
+                    withLock(onContinue)
+                  }}
+                >
+                  {continueLabel}
+                </button>
+              )}
+            </div>
+
+            <p className="sr-only" aria-live="polite">
+              {liveMessage}
+            </p>
+          </section>
+
+          {node.ui?.hideStatusPanel !== true && (
+            <AiStatusPanel stats={currentStats} mode={node.ui?.mode} />
+          )}
+        </div>
       </div>
     </main>
   )

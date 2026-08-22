@@ -6,6 +6,15 @@ type AudioTogglesProps = {
   sfxEnabled: boolean
   onBgmEnabledChange: (next: boolean) => void
   onSfxEnabledChange: (next: boolean) => void
+  /**
+   * 定位方式（V03）。
+   *
+   * - `floating`（默认）：固定在视口右上角，用于开始页与结局页；
+   * - `inline`：不定位，交给外层容器排版，用于剧情页顶栏。
+   *
+   * 只影响这一层容器的定位，按钮本身两种情况完全一样。
+   */
+  variant?: 'floating' | 'inline'
 }
 
 type ChannelToggleProps = {
@@ -56,11 +65,11 @@ function ChannelToggle({
 }
 
 /**
- * 背景音乐与音效的两个独立开关（A01 建立，A03 试玩修订拆分）。
+ * 背景音乐与音效的两个独立开关（A01 建立，A03 试玩修订拆分，V03 改定位）。
  *
- * 由 App 渲染一次并固定在右上角，因此 StartPage、GamePage、EndingPage 上位置
- * 完全一致，不会随页面结构变化跳动，也不会被剧情正文推走。
- * 它在剧情舞台之外，点击不会冒泡到 GamePage 的阅读推进热区。
+ * 开始页与结局页仍然由 App 固定在视口右上角；剧情页把它放进顶栏的按钮组里
+ * （`variant="inline"`），不再悬浮在正文之上 —— 悬浮时章节头必须靠一段
+ * 写死的 padding 给它让位，页面结构一变让位量就要跟着改。
  *
  * 为什么是两个而不是「两个 + 一个总开关」：三个状态之间需要互相同步，
  * 玩家还要先理解它们的优先级；两个独立开关已经能表达全部四种组合。
@@ -73,9 +82,14 @@ export function AudioToggles({
   sfxEnabled,
   onBgmEnabledChange,
   onSfxEnabledChange,
+  variant = 'floating',
 }: AudioTogglesProps) {
   return (
-    <div className="audio-toggles" role="group" aria-label={audioContent.groupLabel}>
+    <div
+      className={`audio-toggles audio-toggles--${variant}`}
+      role="group"
+      aria-label={audioContent.groupLabel}
+    >
       <ChannelToggle
         enabled={bgmEnabled}
         shortName={audioContent.bgm.shortName}

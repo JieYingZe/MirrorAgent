@@ -1936,15 +1936,7 @@ YOU_v2.0 的轮廓变得更加清晰。
           kind: 'narration',
           text: `界面轻微变暗。
 
-部分按钮开始消失。
-
-第四章载入中。`,
-        },
-        {
-          kind: 'quote',
-          pacing: 'slow',
-          emphasis: 'strong',
-          text: '失控日志。',
+部分按钮开始消失。`,
         },
       ],
       next: 'ch4.protection_protocol',

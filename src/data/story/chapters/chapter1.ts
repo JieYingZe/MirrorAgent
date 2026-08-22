@@ -999,16 +999,6 @@ export const chapter1 = {
           speaker: 'agent',
           text: '是否需要我分析？',
         },
-        {
-          kind: 'system',
-          variant: 'status',
-          lines: [{ value: '第二章载入中。' }],
-        },
-        {
-          kind: 'system',
-          variant: 'status',
-          lines: [{ value: '关系回声。' }],
-        },
       ],
       next: 'ch2.forty_seven_seconds',
     },

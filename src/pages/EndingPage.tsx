@@ -1,11 +1,13 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { Copy, RotateCcw } from 'lucide-react'
 import type { EndingDefinition, StoryState } from '../types/story'
 import type { EndingResolution } from '../utils/story'
-import { STAT_KEYS } from '../data/initialGameState'
 import { endingRates } from '../data/story'
-import { buildEndingView } from '../utils/story'
+import { buildEndingReportText, buildEndingView, logEndingSummary } from '../utils/story'
 import { StoryBlockList } from '../components/story/StoryBlockRenderer'
-import { endingContent } from '../data/uiContent'
+import { EndingStatSummary } from '../components/status/EndingStatSummary'
+import { useClipboardCopy } from '../hooks/useClipboardCopy'
+import { endingContent, endingReportLabels } from '../data/uiContent'
 
 type EndingPageProps = {
   ending: EndingDefinition
@@ -14,138 +16,179 @@ type EndingPageProps = {
   onRestart: () => void
 }
 
+/**
+ * 结局页。
+ *
+ * 布局（V03，对齐 design/ui-mockups/ui-ending-desktop.webp）：
+ * 一屏三块 —— 标题区在最上，中间左右并排是结局正文与 AI 镜像报告，
+ * 下面一条矮的状态摘要，最后是两个操作按钮。
+ *
+ * 两块文本各自独立滚动：结局正文与镜像报告都可能很长，
+ * 让它们在自己内部滚，整页就不会变成一条几屏高的长卷 ——
+ * 状态摘要和按钮始终留在视野里，玩家不必翻到底才能重新开始。
+ * 这与剧情页是同一套「固定舞台 + 内部滚动」的做法。
+ */
 export default function EndingPage({ ending, resolution, state, onRestart }: EndingPageProps) {
   const view = useMemo(() => buildEndingView(ending, state), [ending, state])
 
   // 只能显示“理论路径占比”，不是玩家达成率（docs/06 §15）。
   const rate = endingRates.rates[ending.id]
 
+  const { status: copyStatus, copy, reset: resetCopy } = useClipboardCopy()
+  const fallbackRef = useRef<HTMLTextAreaElement | null>(null)
+
+  /*
+    可复制的报告全文（S01）。
+
+    纯函数生成，内容全部来自页面上已经渲染的那些块与四个变量的状态映射；
+    规则 ID、节点 ID 和变量裸数字不在里面（那些只进控制台）。
+  */
+  const reportText = useMemo(
+    () => buildEndingReportText(ending, view, state.stats, endingReportLabels),
+    [ending, view, state.stats],
+  )
+
+  /*
+    开发验证输出（原来是页面上的「开发验证 / DEV SUMMARY」面板）。
+
+    变量裸数字、规则 ID 和整条选择路径只进控制台，不再出现在结局页上 ——
+    结局是一次安静的收尾，一块调试面板会把它直接拆穿。
+    依赖只有结局与状态，因此同一个结局不会重复打印。
+  */
+  useEffect(() => {
+    logEndingSummary(resolution, state, rate)
+  }, [resolution, state, rate])
+
+  // 换了结局就把上一次的复制提示收掉，旧结果不跨场景留着。
+  useEffect(() => {
+    resetCopy()
+  }, [ending.id, resetCopy])
+
+  /*
+    降级路径（docs/03 §6.3）：写剪贴板失败时把全文放进一个只读文本框并选中，
+    玩家一个 Ctrl+C 就能拿走。复制失败不影响重新初始化。
+  */
+  useEffect(() => {
+    if (copyStatus !== 'failed') return
+
+    const field = fallbackRef.current
+
+    if (!field) return
+
+    field.focus()
+    field.select()
+  }, [copyStatus])
+
+  const copyFeedback =
+    copyStatus === 'copied'
+      ? endingContent.copiedFeedback
+      : copyStatus === 'failed'
+        ? endingContent.copyFailedFeedback
+        : ''
+
   return (
     <main className="screen screen--ending fade-in">
-      <div className="ending__inner">
-        {/* 标题区居中，正文与报告保持左对齐：仪式感来自留白与层级，不靠特效（V01）。 */}
+      <div className="ending__stage">
+        {/* 标题区居中，两块正文保持左对齐：仪式感来自留白与层级，不靠特效（V01）。 */}
         <header className="ending__header">
-          <p className="eyebrow">SESSION CLOSED</p>
+          <p className="eyebrow">{endingContent.eyebrow}</p>
 
           <h1 className="ending__title">{ending.title}</h1>
 
           {ending.subtitle && <p className="ending__description">{ending.subtitle}</p>}
         </header>
 
-        <section className="panel ending__body">
-          <StoryBlockList
-            blocks={view.bodyBlocks}
-            idPrefix={`${ending.id}-body`}
-            className="story-blocks"
-          />
-        </section>
+        <div className="ending__columns">
+          <section className="panel ending__panel" aria-labelledby="ending-body-title">
+            <h2 id="ending-body-title" className="ending__panel-title">
+              {endingContent.bodyTitle}
+            </h2>
 
-        <section className="panel report" aria-labelledby="report-title">
-          <h2 id="report-title" className="report__title">
-            {ending.report.title ?? endingContent.reportTitle}
-          </h2>
+            <div className="ending__scroll">
+              <StoryBlockList
+                blocks={view.bodyBlocks}
+                idPrefix={`${ending.id}-body`}
+                className="story-blocks"
+              />
 
-          {ending.report.statusLines.length > 0 && (
-            <dl className="block__lines">
-              {ending.report.statusLines.map((line) => (
-                <div key={line.label} className="block__line">
-                  <dt>{line.label}</dt>
-                  <dd>{line.value}</dd>
-                </div>
-              ))}
-            </dl>
-          )}
+              <StoryBlockList
+                blocks={view.finalLineBlocks}
+                idPrefix={`${ending.id}-final`}
+                className="story-blocks ending__final"
+              />
+            </div>
+          </section>
 
-          <StoryBlockList
-            blocks={view.reportBlocks}
-            idPrefix={`${ending.id}-report`}
-            className="story-blocks"
-          />
+          <section className="panel ending__panel" aria-labelledby="report-title">
+            <h2 id="report-title" className="ending__panel-title">
+              {ending.report.title ?? endingContent.reportTitle}
+            </h2>
 
-          <StoryBlockList
-            blocks={view.echoBlocks}
-            idPrefix={`${ending.id}-echo`}
-            className="story-blocks"
-          />
-        </section>
+            <div className="ending__scroll">
+              {ending.report.statusLines.length > 0 && (
+                <dl className="block__lines report__lines">
+                  {ending.report.statusLines.map((line) => (
+                    <div key={line.label} className="block__line">
+                      <dt>{line.label}</dt>
+                      <dd>{line.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
 
-        <StoryBlockList
-          blocks={view.finalLineBlocks}
-          idPrefix={`${ending.id}-final`}
-          className="story-blocks ending__final"
-        />
+              <StoryBlockList
+                blocks={view.reportBlocks}
+                idPrefix={`${ending.id}-report`}
+                className="story-blocks"
+              />
 
-        {/*
-          开发验证区（G02 / G03）。
-          这是整个项目中唯一允许出现变量裸数字和规则 ID 的位置，只用于人工核对
-          变量累计、标签、flags、finalChoice 和结局判断路径。
-          等 C02 的正式结局文案和 I02 的状态描述系统实现后，这一整块会被移除，
-          不要在这里投入视觉设计。
-        */}
-        <section className="panel dev-summary" aria-labelledby="dev-summary-title">
-          <h2 id="dev-summary-title" className="dev-summary__title">
-            开发验证 / DEV SUMMARY
-          </h2>
+              <StoryBlockList
+                blocks={view.echoBlocks}
+                idPrefix={`${ending.id}-echo`}
+                className="story-blocks"
+              />
+            </div>
+          </section>
+        </div>
 
-          <p className="dev-summary__line">
-            结局判断：
-            <span className="dev-summary__mono">
-              {resolution.endingId} / {resolution.ruleId}
-              {resolution.usedFallback ? ' / 安全兜底' : ''}
-            </span>
-          </p>
+        <EndingStatSummary stats={state.stats} />
 
-          <p className="dev-summary__line">
-            {endingContent.rateLabel}
-            {(rate * 100).toFixed(1)}%
-          </p>
+        <div className="ending__actions">
+          <button
+            type="button"
+            className="button button--ghost ending__action"
+            onClick={() => void copy(reportText)}
+          >
+            <Copy size={16} strokeWidth={1.6} aria-hidden="true" />
+            <span>{endingContent.copyAction}</span>
+          </button>
 
-          <p className="dev-summary__line">
-            finalChoice：
-            <span className="dev-summary__mono">{state.finalChoice ?? '未记录'}</span>
-          </p>
+          <button
+            type="button"
+            className="button button--primary ending__action"
+            onClick={onRestart}
+          >
+            <RotateCcw size={16} strokeWidth={1.6} aria-hidden="true" />
+            <span>{endingContent.primaryAction}</span>
+          </button>
+        </div>
 
-          <p className="dev-summary__line">已记录选择：{state.choiceHistory.length}</p>
+        <p className="ending__feedback" aria-live="polite" data-state={copyStatus}>
+          {copyFeedback || endingContent.primaryHint}
+        </p>
 
-          <ol className="dev-summary__path">
-            {state.choiceHistory.map((record) => (
-              <li key={`${record.nodeId}:${record.choiceId}`}>
-                <span className="dev-summary__mono">{record.nodeId}</span> →{' '}
-                <span className="dev-summary__mono">{record.choiceId}</span>（{record.choiceType}）
-              </li>
-            ))}
-          </ol>
-
-          <dl className="dev-summary__stats">
-            {STAT_KEYS.map((key) => (
-              <div key={key} className="dev-summary__stat">
-                <dt className="dev-summary__mono">{key}</dt>
-                <dd>{state.stats[key]}</dd>
-              </div>
-            ))}
-          </dl>
-
-          <p className="dev-summary__line">
-            tags：<span className="dev-summary__mono">{state.tags.join('、') || '无'}</span>
-          </p>
-
-          <p className="dev-summary__line">
-            flags：
-            <span className="dev-summary__mono">
-              {Object.entries(state.flags)
-                .map(([key, value]) => `${key}=${String(value)}`)
-                .join('、') || '无'}
-            </span>
-          </p>
-
-          <p className="dev-summary__line">
-            访问节点：{state.visitedNodeIds.length} / schemaVersion {state.schemaVersion}
-          </p>
-        </section>
-
-        <button type="button" className="button button--primary" onClick={onRestart}>
-          {endingContent.primaryAction}
-        </button>
+        {copyStatus === 'failed' && (
+          <label className="ending__fallback">
+            <span className="sr-only">{endingContent.copyFallbackLabel}</span>
+            <textarea
+              ref={fallbackRef}
+              className="ending__fallback-field"
+              readOnly
+              rows={6}
+              value={reportText}
+            />
+          </label>
+        )}
       </div>
     </main>
   )

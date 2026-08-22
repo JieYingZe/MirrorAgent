@@ -1818,11 +1818,6 @@ export const chapter4 = {
           text: '既然我能够替你减少自由带来的噪声——\n为什么只在你失控的时候使用我？',
           pacing: 'slow',
         },
-        {
-          kind: 'narration',
-          text: '第五章载入中。\n\n关闭确认。',
-          pacing: 'slow',
-        },
       ],
       next: 'ch5.permanent_request',
       ui: {

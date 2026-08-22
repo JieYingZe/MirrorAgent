@@ -22,14 +22,15 @@
 | 内容实现 | C02 | 结局文案 | 5 个结局 | P0 | 已完成 | 每个结局都有标题、正文、AI 镜像报告 | 五个结局的正文、镜像报告与结尾句已录入；路径回声改为五个结局共用的 `endings/pathEchoes.ts`（22 条，按章分组）。浏览器实测五个结局均可正常进入并渲染 |
 | 规则实现 | R01 | 结局判断逻辑 | `src/utils/story/getEnding.ts`、`src/data/story/rules/endingRules.ts` | P0 | 已完成 | 不同路径能触发不同结局 | 已按 `story-source/08-ending-rules.md` 实现：mirror_trap 最高优先级、强授权去重计数、`ask_identity` 四种去向、缺失 finalChoice 的安全兜底；兜底不会返回 mirror_trap 或 active_disconnection。已接入正式剧情并通过单元测试（`npm test`）与 20000 条抽样路径模拟 |
 | 交互体验 | I01 | 打字机效果与阅读节奏 | `useStoryReadingSequence` + `utils/story/reading*` | P1 | 已完成 | 文本逐字显示，可点击跳过当前段 | 统一阅读状态机 + 固定高度剧情阅读区 + 自动播放开关。已做两次验收修订：①剧情区改为受控高度的独立滚动容器、自动跟随只滚容器不滚页面；②自动播放默认关闭并交给独立的本地用户偏好，开关关闭时立即补全当前 block 并停住，开启时一次点击看完当前展示序列，推进热区扩大到舞台空白。详见下方“I01 说明”。没有实现 `TypewriterText` 组件：揭示是整段序列的状态，不是单个文本组件的私有状态 |
-| 交互体验 | I02 | AI 状态面板 | `AiStatusPanel` | P1 | 已完成 | 不直接显示数字，而显示状态描述 | 四变量经 `src/utils/aiStatus.ts` 的纯映射转成状态文案（语气／反馈／权限／自我边界，每个变量五档），区间与结局阈值对齐、首末档向 ±∞ 开放，NaN 与缺字段回落到初始档；面板只展示，不写回 `StoryState`。GamePage 传入最新 `stats`，因此显示选项专属回应时也会立即更新，并尊重节点的 `ui.hideStatusPanel` 与 `ui.mode: 'control'`（仅边框与提示语变化）。桌面 280px 右栏、≤900px 两列紧凑卡片，320px 无换行无横向滚动。`tests/aiStatus.test.ts` 18 个用例覆盖区间边界、初始值、剧情实际取值范围与 ±1000／±Infinity |
+| 交互体验 | I02 | AI 状态面板 | `AiStatusPanel` | P1 | 已完成 | 不直接显示数字，而显示状态描述 | 四变量经 `src/utils/aiStatus.ts` 的纯映射转成状态文案（语气／反馈／权限／边界，每个变量五档；V03 起标签最多两字、状态文案统一四字以内），区间与结局阈值对齐、首末档向 ±∞ 开放，NaN 与缺字段回落到初始档；面板只展示，不写回 `StoryState`。GamePage 传入最新 `stats`，因此显示选项专属回应时也会立即更新，并尊重节点的 `ui.hideStatusPanel` 与 `ui.mode: 'control'`（仅边框与提示语变化）。桌面 260–300px 右栏（V03 起每行带图标与英文副标）、≤900px 两列紧凑卡片、≤768px 隐藏图标与英文副标，320px 无换行无横向滚动。`tests/aiStatus.test.ts` 18 个用例覆盖区间边界、初始值、剧情实际取值范围与 ±1000／±Infinity |
 | 交互体验 | I03 | 本地存档 | localStorage | P1 | 已完成 | 刷新后可继续，结局后可重开 | 存档键 `mirror-agent:story-save`，直接持久化正式 `StoryState`（见下方“I03 说明”）。`src/utils/story/storySave.ts` 提供 load / save / clear / validate，恢复前逐字段校验并复用正式剧情索引；损坏、旧版本、引用失效的存档安全清除后按无存档处理，localStorage 不可用时静默降级为不保存。存档只处理剧情状态，音频偏好仍属 A01 且必须使用独立键 |
 | 音频体验 | A01 | 启动遮罩与音频管理 | `StartupGate` 覆盖层、全局音频管理 | P1 | 已完成 | 详见下方“A01 验收标准” | 应用级 `StartupGate` + `inert` 业务层 + 固定右上角静音按钮；音频状态所有者只有一个（`utils/audio/bgmPlayer.ts`）。用户偏好升级到 v2，加入 `muted` / `masterVolume`，写入口合并为 `useUserPreferences`。详见下方“A01 / A02 说明” |
 | 音频体验 | A02 | BGM 场景映射与切换 | BGM 场景映射与切换逻辑 | P1 | 已完成 | 详见下方“A02 验收标准” | 场景解析集中在 `utils/audio/bgmScene.ts`（纯函数），资源与音量集中在 `data/audioTracks.ts`；`manifest.ts` 保持不变。实测一次完整通关只创建 5 个 Audio 实例、只换 4 次曲。详见下方“A01 / A02 说明” |
 | 音频体验 | A03 | SFX 接入与音量平衡 | 音效触发与音量策略 | P2 | 已完成 | 详见下方“A03 验收标准” | 四种 SFX（click／choice／typing／warning）接入，背景音乐与音效各有独立开关。剧情选择的音效在确认被接受时立即触发。触发判定与限频策略全部是纯函数。详见下方“A03 SFX 说明”。**音量仍未经听觉验收** |
 | 视觉实现 | V01 | 全局视觉风格 | `src/styles/global.css` | P1 | 已完成 | 暗色、安静、AI 终端感、可读性好 | 变量分组重排、字体层级、面板与按钮底色、开始页成稿构图、结局页仪式感、状态面板移动端压缩、1024px 拥挤修复。正文桌面 17px／移动 16px，实测对比度全部 ≥ 4.5:1。视觉规范见 `docs/04-ui-visual-spec.md` |
 | 视觉实现 | V02 | 页面背景与插画接入 | 背景图、渐变、遮罩 | P1 | 已完成 | 每章有氛围区分且风格统一 | 七个视觉场景（start / prologue / 第一至第五章-结局）。场景解析集中在 `utils/visualScene.ts` + `data/visualScenes.ts`，背景层组件 `components/visual/SceneBackground.tsx`。只在场景键变化时换图，一次完整通关恰好 7 次图片请求、7 个唯一 URL。`bg-start` 是开始页成稿，`contain` 完整显示；序章用独立的 `bg-prologue`。资源映射见 `docs/05-assets-map.md` §3 |
-| 传播功能 | S01 | 复制镜像报告 | 结局页按钮 | P2 | 未开始 | 可复制结局标题、报告、变量描述 | 不支持 Clipboard 时要降级 |
+| 视觉实现 | V03 | 剧情页布局与毛玻璃重构 | `GamePage`、`AiStatusPanel`、`ChoiceList`、`AudioToggles`、`src/styles/global.css` | P2 | 已完成 | 对齐 `design/ui-mockups/` 成稿：上下布局、选项横排、面板毛玻璃、状态面板带图标与英文 | 剧情页改成「顶栏 + 两列」：标题与全部开关收进顶栏，音频开关不再悬浮（`AudioToggles` 增加 `variant`，开始页与结局页仍固定右上角），原来给悬浮控件让位的几段写死 padding 一并删除。左列的 `.panel` 现在同时包住阅读区与选项，滚动条落在面板内侧；`.game__text` 加 `contain: size`，面板因此有确定的最小高度，屏幕过矮时完整长出来而不是被压得比内容还短。选项改网格：桌面 2×2 等高等宽，移动端单列全宽。两块面板改半透明 + `backdrop-filter`，不支持时由 `@supports` 把底色调回实色；剧情页遮罩右半边相应抬了一档。状态面板加图标与英文副标（≤768px 隐藏），标签「自我边界」收成「边界」，状态文案统一四字以内。试玩修订：①毛玻璃再松一档（面板 alpha 下调、模糊 28px、加一层极淡浅色渐变与更亮的边，剧情页遮罩整体松开，`--color-text-faint` 相应提亮）；②业务层 `user-select: none`，双击／拖动不再选中正文，`hasTextSelection()` 随之删除；③自动播放与两个音频开关统一成同一个胶囊外形，「开／关」去掉底色块；④删掉四处「第 X 章载入中 / 下一章标题」的章节过场（源稿与运行时数据同步）；⑤结局页的「开发验证 / DEV SUMMARY」整块移到控制台（`utils/story/endingSummaryLog.ts`）。第二轮试玩修订：⑥圆角整体收小（面板 22→12、卡片 14→9、按钮 14→7），胶囊开关保持 999px；⑦状态面板与正文面板同档透明（`--color-panel` 0.5→0.4）；⑧结局页重做成「一屏三块」：标题区 → 左右两块独立滚动的文本 → 一条矮的状态摘要（图标 + 五档点 + 状态文案，与剧情页共用 `components/status/statusIcons.ts`），移动端解除固定舞台改回长页滚动；⑨结局页补上 S01 的复制按钮，两个按钮都带图标 |
+| 传播功能 | S01 | 复制镜像报告 | 结局页按钮 | P2 | 已完成 | 可复制结局标题、报告、变量描述 | 文本由纯函数生成（`utils/story/endingReportText.ts` + `blockText.ts`），内容全部来自页面上已渲染的块与状态映射：规则 ID、节点 ID、变量裸数字一个都不出现（那些只进控制台）。段落顺序照 `docs/03` §6.2。剪贴板由 `hooks/useClipboardCopy.ts` 承担：成功提示 2.6 秒后自动收回，失败时渲染一个只读 textarea 并自动选中（`user-select` 例外规则），复制失败不影响重新初始化。`tests/endingReportText.test.ts` 8 个用例覆盖各类块的拍平、空内容跳过、段落顺序，并对五个正式结局逐一断言不泄漏内部标识 |
 | 部署发布 | DEP01 | GitHub Pages 配置 | `vite.config.ts`、README | P0 | 未开始 | `npm run build` 通过并可部署 | 注意 base 路径 |
 | 测试打磨 | T01 | 移动端适配 | CSS 响应式 | P1 | 未开始 | 320px 宽度可玩，按钮易点 | 重点测手机浏览器 |
 | 测试打磨 | T02 | 试玩反馈 | 反馈记录 | P2 | 未开始 | 至少 3 位朋友试玩，记录卡点和被打动的句子 | 问“哪一句最打到你” |
@@ -340,10 +341,12 @@ StartPage / GamePage / EndingPage 完全不认识音频，也不持有任何 Aud
   然后**无条件**关闭遮罩：解锁失败、文件 404、解码失败、被浏览器拒绝都不弹窗、不显示错误页，
   只在控制台 `warn` 一次并静默降级为无声。
 - 「点击进入实验」与 StartPage 的「开始初始化／继续实验」是两个独立动作，遮罩不读写剧情存档。
-- 背景音乐与音效各有一个独立开关（`components/audio/AudioToggles.tsx`），由 `App`
-  渲染一次、`position: fixed` 在右上角，因此三个页面上位置完全一致；
+- 背景音乐与音效各有一个独立开关（`components/audio/AudioToggles.tsx`）；
   原生 `button` + `aria-pressed` + 明确 `aria-label`，键盘可用并保留 focus-visible。
-  它在剧情舞台之外，点击不会冒泡到 GamePage 的阅读推进热区。
+  开始页与结局页由 `App` 渲染一次、`position: fixed` 在右上角；
+  剧情页从 V03 起改由 `GamePage` 排进自己的顶栏（`variant="inline"`），
+  `App` 在剧情页不再渲染悬浮的那一组，同一页不会出现两组开关。
+  它们始终是 `button`，点击不会冒泡到 GamePage 的阅读推进热区。
 - 关闭背景音乐时立即停止并释放实例（不淡出、不保留播放位置）；
   重新开启时按**当前场景**新建实例淡入。
 - 偏好结构是 `version: 3`：`{ autoplayEnabled, bgmMuted, sfxMuted, masterVolume }`。
@@ -405,12 +408,12 @@ StartPage / GamePage / EndingPage 完全不认识音频，也不持有任何 Aud
 
 ### 布局
 
-静音按钮固定在右上角。两列布局下剧情列被 `--max-reading-width` 卡在 720px，
-右边缘离视口右上角还有一大截，开关落在空白里什么都不挡；
-≤900px 单列后章节头铺满舞台，才需要 `.game__header { padding-right: 52px }` 让位。
-状态面板**不**整卡收内边距 —— 那会压窄下面的状态项网格，320px 下有两组文字折行、
-面板高度涨 18px，直接从本来就不多的正文高度里扣（I01 的固定舞台）；
-只给真正会贴到右上角的 `.status__hint` 收一格。
+A01／A03 时代开关悬浮在右上角，章节头与状态提示都要用写死的 `padding-right`
+给它让位；让位量随开关个数、页面结构变化，每改一次结构就要重算一次。
+
+V03 起剧情页有了自己的顶栏，开关排在顶栏右端，由 flex 决定位置，
+上述让位规则全部删除。开始页与结局页没有顶栏，也没有会被挡住的结构，
+继续保持悬浮。
 
 ### 验证结果
 
@@ -462,8 +465,8 @@ GamePage 上点静音按钮不推进剧情（节点、块数、正文长度均�
   真实切标签页的行为需要再确认一次（尤其是移动端浏览器切后台时的自动暂停）。
 - **只在 Chromium 上验证过**。Safari 的自动播放策略更严格，iOS 上还有静音开关的影响，
   需要在真机上确认「点击进入实验」是否真的能解锁。
-- EndingPage 在 320px 下有 2px 横向溢出，来自开发验证区的 `dev-summary__mono`，
-  与音频无关，去掉开发验证区时会一并消失。
+- ~~EndingPage 在 320px 下有 2px 横向溢出，来自开发验证区的 `dev-summary__mono`~~
+  已解决：开发验证区整块移到控制台（V03 试玩修订），溢出随之消失。
 
 ---
 
@@ -514,8 +517,8 @@ BGM 多一层淡变系数（只在 600ms 交叉期间生效），SFX 没有淡�
 
 背景音乐与音效各有一个开关，不设第三个「全部静音」总开关。原生 `<button>` +
 `aria-pressed`，可见的「开／关」文字承担主要的状态表达（不只靠图标），
-`aria-label` / `title` 说明完整含义，键盘可用。固定在右上角，三个页面位置一致，
-不冒泡到 GamePage 的阅读推进热区。
+`aria-label` / `title` 说明完整含义，键盘可用。开始页与结局页固定在右上角，
+剧情页排在顶栏右端（V03），两种情况都不冒泡到 GamePage 的阅读推进热区。
 
 偏好结构 `{ version: 3, autoplayEnabled, bgmMuted, sfxMuted, masterVolume }`，
 `version` 只记录写入时的结构，读取一律逐字段校验后与默认值合并；旧的单一 `muted`

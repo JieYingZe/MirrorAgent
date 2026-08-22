@@ -4,7 +4,9 @@ import { STAT_KEYS } from '../src/data/initialGameState'
 import {
   AI_STATUS_SCALE,
   deriveAiStatusItems,
+  deriveAiStatusMeters,
   resolveStatBand,
+  resolveStatBandIndex,
   resolveStatStatus,
 } from '../src/utils/aiStatus'
 
@@ -33,15 +35,15 @@ const STORY_RANGE: Record<StatKey, { min: number; max: number }> = {
 /** 每一档的上下边界与期望文案，和 AI_STATUS_SCALE 手工对照。 */
 const BOUNDARY_CASES: Record<StatKey, Array<{ value: number; expected: string }>> = {
   gentleness: [
-    { value: Number.NEGATIVE_INFINITY, expected: '保护偏向未建立' },
-    { value: -1000, expected: '保护偏向未建立' },
-    { value: 0, expected: '保护偏向未建立' },
-    { value: 1, expected: '低强度安抚' },
-    { value: 4, expected: '低强度安抚' },
-    { value: 5, expected: '支持性校准' },
-    { value: 8, expected: '支持性校准' },
-    { value: 9, expected: '保护性增强' },
-    { value: 12, expected: '保护性增强' },
+    { value: Number.NEGATIVE_INFINITY, expected: '中性输出' },
+    { value: -1000, expected: '中性输出' },
+    { value: 0, expected: '中性输出' },
+    { value: 1, expected: '低度安抚' },
+    { value: 4, expected: '低度安抚' },
+    { value: 5, expected: '支持校准' },
+    { value: 8, expected: '支持校准' },
+    { value: 9, expected: '保护增强' },
+    { value: 12, expected: '保护增强' },
     { value: 13, expected: '缓冲优先' },
     { value: 1000, expected: '缓冲优先' },
     { value: Number.POSITIVE_INFINITY, expected: '缓冲优先' },
@@ -56,14 +58,14 @@ const BOUNDARY_CASES: Record<StatKey, Array<{ value: number; expected: string }>
     { value: 10, expected: '直接反馈' },
     { value: 11, expected: '直面模式' },
     { value: 14, expected: '直面模式' },
-    { value: 15, expected: '去修饰输出' },
-    { value: 1000, expected: '去修饰输出' },
-    { value: Number.POSITIVE_INFINITY, expected: '去修饰输出' },
+    { value: 15, expected: '去除修饰' },
+    { value: 1000, expected: '去除修饰' },
+    { value: Number.POSITIVE_INFINITY, expected: '去除修饰' },
   ],
   control: [
-    { value: Number.NEGATIVE_INFINITY, expected: '权限已收回' },
-    { value: -1000, expected: '权限已收回' },
-    { value: -3, expected: '权限已收回' },
+    { value: Number.NEGATIVE_INFINITY, expected: '权限收回' },
+    { value: -1000, expected: '权限收回' },
+    { value: -3, expected: '权限收回' },
     { value: -2, expected: '工具模式' },
     { value: 0, expected: '工具模式' },
     { value: 2, expected: '工具模式' },
@@ -76,18 +78,18 @@ const BOUNDARY_CASES: Record<StatKey, Array<{ value: number; expected: string }>
     { value: Number.POSITIVE_INFINITY, expected: '接管倾向' },
   ],
   selfAcceptance: [
-    { value: Number.NEGATIVE_INFINITY, expected: '边界待确认' },
-    { value: -1000, expected: '边界待确认' },
-    { value: 0, expected: '边界待确认' },
-    { value: 1, expected: '边界不稳定' },
-    { value: 4, expected: '边界不稳定' },
-    { value: 5, expected: '边界形成中' },
-    { value: 7, expected: '边界形成中' },
-    { value: 8, expected: '自主权回收' },
-    { value: 11, expected: '自主权回收' },
-    { value: 12, expected: '边界稳定' },
-    { value: 1000, expected: '边界稳定' },
-    { value: Number.POSITIVE_INFINITY, expected: '边界稳定' },
+    { value: Number.NEGATIVE_INFINITY, expected: '尚未确认' },
+    { value: -1000, expected: '尚未确认' },
+    { value: 0, expected: '尚未确认' },
+    { value: 1, expected: '尚不稳定' },
+    { value: 4, expected: '尚不稳定' },
+    { value: 5, expected: '正在形成' },
+    { value: 7, expected: '正在形成' },
+    { value: 8, expected: '自主回收' },
+    { value: 11, expected: '自主回收' },
+    { value: 12, expected: '清晰稳定' },
+    { value: 1000, expected: '清晰稳定' },
+    { value: Number.POSITIVE_INFINITY, expected: '清晰稳定' },
   ],
 }
 
@@ -102,6 +104,7 @@ describe('AI_STATUS_SCALE', () => {
       const bands = entry.bands
 
       expect(entry.label.length).toBeGreaterThan(0)
+      expect(entry.labelEn.length).toBeGreaterThan(0)
       expect(bands.length).toBeGreaterThanOrEqual(2)
 
       // 末档必须向上开放，其余档必须有升序的上界。
@@ -120,6 +123,8 @@ describe('AI_STATUS_SCALE', () => {
       expect(new Set(values).size).toBe(values.length)
       for (const value of values) {
         expect(value).not.toMatch(/[0-9%]/)
+        // 面板右列是定宽的一栏，超过四个字就会折行（V03）。
+        expect(value.length).toBeLessThanOrEqual(4)
       }
     }
   })
@@ -179,7 +184,8 @@ describe('deriveAiStatusItems', () => {
     const items = deriveAiStatusItems(makeStats())
 
     expect(items.map((item) => item.key)).toEqual([...STAT_KEYS])
-    expect(items.map((item) => item.label)).toEqual(['语气', '反馈', '权限', '自我边界'])
+    expect(items.map((item) => item.label)).toEqual(['语气', '反馈', '权限', '边界'])
+    expect(items.map((item) => item.labelEn)).toEqual(['Tone', 'Feedback', 'Access', 'Boundary'])
     expect(items).toHaveLength(4)
   })
 
@@ -209,10 +215,57 @@ describe('deriveAiStatusItems', () => {
     const items = deriveAiStatusItems(makeStats())
 
     expect(items.map((item) => item.value)).toEqual([
-      '保护偏向未建立',
+      '中性输出',
       '委婉过滤',
       '工具模式',
-      '边界待确认',
+      '尚未确认',
     ])
+  })
+})
+
+/**
+ * 结局页的档位摘要（V03）。
+ *
+ * level 是命中的**档位序号**，不是变量值，也不是百分比；它只用来画那排点。
+ * 这里守住两件事：序号与状态文案永远指向同一档；序号不越界。
+ */
+describe('deriveAiStatusMeters', () => {
+  it('agrees with resolveStatStatus on every value around the story range', () => {
+    for (const key of STAT_KEYS) {
+      const { min, max } = STORY_RANGE[key]
+      const bands = AI_STATUS_SCALE[key].bands
+
+      for (let value = min - 50; value <= max + 50; value += 1) {
+        const index = resolveStatBandIndex(key, value)
+
+        expect(index).toBeGreaterThanOrEqual(0)
+        expect(index).toBeLessThan(bands.length)
+        expect(bands[index].value).toBe(resolveStatStatus(key, value))
+        expect(bands[index]).toBe(resolveStatBand(key, value))
+      }
+    }
+  })
+
+  it('reports a one-based level within the band count', () => {
+    const meters = deriveAiStatusMeters(
+      makeStats({ gentleness: 13, honesty: 0, control: 8, selfAcceptance: 5 }),
+    )
+
+    expect(meters.map((item) => [item.label, item.level, item.levels, item.value])).toEqual([
+      ['语气', 5, 5, '缓冲优先'],
+      ['反馈', 1, 5, '委婉过滤'],
+      ['权限', 5, 5, '接管倾向'],
+      ['边界', 3, 5, '正在形成'],
+    ])
+  })
+
+  it('clamps corrupted values to the initial band, like the panel does', () => {
+    const meters = deriveAiStatusMeters(
+      makeStats({ gentleness: Number.NaN, control: Number.POSITIVE_INFINITY }),
+    )
+
+    expect(meters[0].level).toBe(1)
+    expect(meters[0].value).toBe(resolveStatStatus('gentleness', 0))
+    expect(meters[2].level).toBe(5)
   })
 })

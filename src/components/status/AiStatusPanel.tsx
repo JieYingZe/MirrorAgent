@@ -2,6 +2,7 @@ import type { Stats } from '../../types/game'
 import type { NodeUiHints } from '../../types/story'
 import { deriveAiStatusItems } from '../../utils/aiStatus'
 import { statusPanelContent } from '../../data/uiContent'
+import { STATUS_ICONS } from './statusIcons'
 
 type AiStatusPanelProps = {
   /** 当前变量值；显示选项专属回应时也应传入选择之后的最新值。 */
@@ -14,7 +15,11 @@ type AiStatusPanelProps = {
  * AI 状态面板。
  *
  * 纯展示：不更新变量、不查结局、不解析路由、不写存档，也不认识任何节点 ID。
- * 变量到状态文案的映射全部在 utils/aiStatus.ts，这里只把结果排版成系统日志的样子。
+ * 变量到状态文案的映射全部在 utils/aiStatus.ts，这里只把结果排版成系统面板的样子。
+ *
+ * 排版对齐 design/ui-mockups/ui-game-desktop.webp：
+ * 每一行是「图标 + 中文标签 / 英文副标」在左、状态文案在右，
+ * 标题与运行提示并成同一行，提示前面带一颗呼吸灯似的圆点。
  */
 export function AiStatusPanel({ stats, mode }: AiStatusPanelProps) {
   const items = deriveAiStatusItems(stats)
@@ -31,18 +36,31 @@ export function AiStatusPanel({ stats, mode }: AiStatusPanelProps) {
       // 面板整体不参与阅读推进：点状态面板不该快进正文（I01）。
       data-no-story-advance="true"
     >
-      <h2 className="status__title">{statusPanelContent.title}</h2>
+      <div className="status__head">
+        <h2 className="status__title">{statusPanelContent.title}</h2>
+        <p className="status__hint">{hint}</p>
+      </div>
 
       <dl key={signature} className="status__list">
-        {items.map((item) => (
-          <div key={item.key} className="status__item">
-            <dt>{item.label}</dt>
-            <dd>{item.value}</dd>
-          </div>
-        ))}
-      </dl>
+        {items.map((item) => {
+          const Icon = STATUS_ICONS[item.key]
 
-      <p className="status__hint">{hint}</p>
+          return (
+            <div key={item.key} className="status__item">
+              <dt className="status__term">
+                <span className="status__icon" aria-hidden="true">
+                  <Icon size={14} strokeWidth={1.6} />
+                </span>
+                <span className="status__label">
+                  <span className="status__label-zh">{item.label}</span>
+                  <span className="status__label-en">{item.labelEn}</span>
+                </span>
+              </dt>
+              <dd className="status__value">{item.value}</dd>
+            </div>
+          )
+        })}
+      </dl>
     </aside>
   )
 }

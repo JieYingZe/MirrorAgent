@@ -481,6 +481,11 @@ export default function App() {
             responseKey={responseStage?.sequenceKey ?? null}
             autoplayEnabled={preferences.autoplayEnabled}
             onAutoplayEnabledChange={handleAutoplayEnabledChange}
+            // 剧情页把音频开关排进自己的顶栏，因此需要这几个转发值（V03）。
+            bgmEnabled={!preferences.bgmMuted}
+            sfxEnabled={!preferences.sfxMuted}
+            onBgmEnabledChange={handleBgmEnabledChange}
+            onSfxEnabledChange={handleSfxEnabledChange}
             onChoose={handleChoose}
             onContinue={handleContinue}
             onReadingReveal={handleReadingReveal}
@@ -632,8 +637,12 @@ export default function App() {
         />
         {renderScreen(view)}
 
-        {/* 固定在右上角，因此三个页面上的位置完全一致，不随页面结构跳动。 */}
-        {!gateOpen && (
+        {/*
+          开始页与结局页仍然把开关固定在右上角：这两页没有顶栏，也没有会被
+          悬浮控件挡住的结构。剧情页有自己的顶栏，开关排在那里（V03），
+          所以这里不再渲染，免得同一组开关在同一页出现两次。
+        */}
+        {!gateOpen && view.surface !== 'game' && (
           <AudioToggles
             bgmEnabled={!preferences.bgmMuted}
             sfxEnabled={!preferences.sfxMuted}

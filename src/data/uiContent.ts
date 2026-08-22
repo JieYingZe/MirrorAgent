@@ -94,22 +94,52 @@ export const gameContent = {
  * 这里只保留标题、无障碍名称和系统提示语。
  */
 export const statusPanelContent = {
-  title: 'MIRROR AGENT STATUS',
+  /*
+    标题与运行提示并排在面板第一行（V03，对齐 design/ui-mockups/ui-game-desktop.webp）。
+    原来的 'MIRROR AGENT STATUS' 独占一行，加上提示语之后在 260px 的面板里放不下；
+    英文改为出现在每个状态项的副标上，标题本身收成中文短标。
+  */
+  title: 'AI 状态',
   ariaLabel: 'AI 状态面板',
   hints: {
     /** 普通节点。 */
-    normal: '参数校准持续运行',
+    normal: '实时监测',
     /** 节点 ui.mode 为 control 时（第四章失控段落）。 */
-    control: '权限边界审查中',
+    control: '权限审查中',
   },
 }
 
 /** 结局页的框架文案；五个结局的正文与镜像报告属于 C02。 */
 export const endingContent = {
+  eyebrow: '结局达成',
+  bodyTitle: '结局正文',
   reportTitle: 'AI 镜像报告',
-  /** 不能写成“达成概率”，当前没有真实玩家统计（docs/06 §15）。 */
-  rateLabel: '理论路径占比约 ',
+  statSummaryTitle: '状态摘要',
+  /*
+    这里曾经有一个 rateLabel（“理论路径占比约 ”）。它只出现在结局页的开发验证区里，
+    那一整块已经移到控制台（utils/story/endingSummaryLog.ts），所以这条文案
+    不再属于界面文案。占比本身仍然只能称“理论路径占比”，不能写成“达成概率”
+    —— 当前没有真实玩家统计（docs/06 §15）。
+  */
   primaryAction: '重新初始化',
+  primaryHint: '开启一段新的对话',
+  copyAction: '复制我的镜像报告',
+  copiedFeedback: '已复制镜像报告',
+  copyFailedFeedback: '无法访问剪贴板，请手动复制下面的内容。',
+  copyFallbackLabel: '镜像报告全文（可手动复制）',
+}
+
+/**
+ * 复制出去的镜像报告里那几行固定标题（S01）。
+ *
+ * 与 endingContent 分开：这些字不出现在界面上，是玩家粘贴到别处之后
+ * 别人会读到的内容，格式由 docs/03-interaction-design.md §6.2 规定。
+ */
+export const endingReportLabels = {
+  heading: '《镜中代理 Mirror Agent》',
+  endingLabel: '我的结局：',
+  reportLabel: 'AI 镜像报告：',
+  statusLabel: '状态记录：',
 }
 
 export const dataErrorContent = {
