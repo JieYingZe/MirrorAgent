@@ -41,12 +41,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      # 仓库 Settings → Pages 的 Source 必须先设成 GitHub Actions。
+      # 不使用 configure-pages 的 `enablement`：GITHUB_TOKEN 没有建站权限，
+      # 开着只会让每次构建都以 "Resource not accessible by integration" 失败。
       - name: Setup Pages
         uses: actions/configure-pages@v6
-        with:
-          # Pages 还没启用时由这一步用 GITHUB_TOKEN 建站并设成 workflow 源，
-          # 省掉一次仓库设置页的手动开关；已启用则是空操作。
-          enablement: true
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
