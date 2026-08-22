@@ -21,7 +21,13 @@ import {
 } from '../utils/story'
 import type { ReadingRevealEvent } from '../utils/story/readingReveal'
 import { useStoryReadingSequence } from '../hooks/useStoryReadingSequence'
-import { isTargetVisibleInContainer, resolveContainerScrollDelta } from '../utils/readingScroll'
+import {
+  PROGRAMMATIC_SCROLL_GUARD_MS,
+  classifyReadingScroll,
+  isTargetVisibleInContainer,
+  resolveContainerScrollDelta,
+} from '../utils/readingScroll'
+import type { PendingProgrammaticScroll } from '../utils/readingScroll'
 import { gameContent } from '../data/uiContent'
 
 type GamePageProps = {
@@ -104,21 +110,42 @@ function isScrollbarPress(event: PointerEvent<HTMLElement>): boolean {
  *
  * 只改容器的 scrollTop，不用 scrollIntoView —— 后者会连带滚动外层页面。
  * 几何计算在 utils/readingScroll.ts，这里只负责读矩形和发起滚动。
+ *
+ * 滚动是瞬时的（behavior: 'auto'）。这不是省事，是为了不抖：
+ * 这次滚动发生在 layout effect 里，也就是新块已经进 DOM、浏览器还没绘制的时候。
+ * 瞬时滚动会和新块在同一帧落定，玩家看到的是一次干净的位移；
+ * 换成平滑滚动，浏览器就必须先按「内容变长了、位置还没动」画出一帧
+ * —— 滚动条在那一帧缩短并往回跳，然后再随动画滑回来，这就是那下抖动。
+ *
+ * 返回这次滚动的目标位置；已经在视野里、不需要滚时返回 null。
+ * 调用方拿它给程序滚动立护栏。
  */
-function scrollBlockIntoContainerView(
-  container: HTMLElement,
-  target: Element,
-  behavior: ScrollBehavior,
-): void {
+function scrollBlockIntoContainerView(container: HTMLElement, target: Element): number | null {
   const delta = resolveContainerScrollDelta(
     container.getBoundingClientRect(),
     target.getBoundingClientRect(),
   )
 
-  if (Math.abs(delta) < 1) return
+  if (Math.abs(delta) < 1) return null
 
-  container.scrollTo({ top: Math.round(container.scrollTop + delta), behavior })
+  const top = Math.round(container.scrollTop + delta)
+
+  container.scrollTo({ top, behavior: 'auto' })
+
+  return top
 }
+
+/** 会滚动阅读区的按键；其余按键不是滚动意图，不该留下滚动痕迹。 */
+const SCROLL_KEYS = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'PageUp',
+  'PageDown',
+  'Home',
+  'End',
+])
 
 /**
  * 剧情游玩页。
@@ -168,12 +195,15 @@ export default function GamePage({
   /** 玩家是否还在跟读当前块；主动往回翻历史后置为 false。 */
   const followCurrentBlockRef = useRef(true)
   /**
-   * 这一次 scroll 是不是玩家自己滚的。
+   * 最近一次真实滚动输入（滚轮、触摸、滚动键）的时间戳。
    *
-   * 只有滚轮、触摸、按键、按下滚动条这些真实输入会把它置为 true。
-   * 程序滚动（尤其是平滑滚动的中间帧）不会，因此自动跟随不会被自己关掉。
+   * 用时间戳而不是布尔量：已经滚到底还继续滚轮时不会有任何 scroll 事件，
+   * 布尔量会一直停在 true，随后被某次程序滚动的中间帧认领，
+   * 自动跟随就此被自己关掉 —— 这正是「点下一段却不滚下去」的来源。
    */
-  const userScrollIntentRef = useRef(false)
+  const lastUserScrollIntentAtRef = useRef(0)
+  /** 进行中的程序滚动；它发出的 scroll 事件不参与跟随判断。 */
+  const programmaticScrollRef = useRef<PendingProgrammaticScroll | null>(null)
   /** 本次 pointer 交互是不是滚动／拖动／按滚动条，是的话随后的 click 不推进。 */
   const pointerBlockedRef = useRef(false)
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null)
@@ -203,7 +233,27 @@ export default function GamePage({
     action()
   }
 
-  const advanceReading = reading.advance
+  const markUserScrollIntent = useCallback(() => {
+    lastUserScrollIntentAtRef.current = Date.now()
+  }, [])
+
+  /**
+   * 阅读推进的统一入口。
+   *
+   * 除了推进本身，还负责一件事：玩家主动要下一段，就是要看下一段。
+   * 因此每次真的消费了输入都恢复自动跟随，并清掉过期的滚动意图；
+   * 「往回翻历史就不要把我拉回去」只对自动播放这种玩家没出手的推进有意义。
+   */
+  const advanceReading = useCallback(() => {
+    const consumed = reading.advance()
+
+    if (!consumed) return false
+
+    followCurrentBlockRef.current = true
+    lastUserScrollIntentAtRef.current = 0
+
+    return true
+  }, [reading.advance])
 
   /* ---------- 阅读推进：整个舞台的非交互空白都算热区 ---------- */
 
@@ -241,8 +291,9 @@ export default function GamePage({
   const handleStageKeyDown = useCallback(
     (event: KeyboardEvent<HTMLElement>) => {
       if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
-        // 方向键、PageUp/PageDown、Home/End 等都是玩家在自己滚动阅读区。
-        userScrollIntentRef.current = true
+        // 方向键、PageUp/PageDown、Home/End 是玩家在自己滚动阅读区；
+        // 其余按键既不推进也不滚动，不留下滚动意图。
+        if (SCROLL_KEYS.has(event.key)) markUserScrollIntent()
         return
       }
 
@@ -258,7 +309,7 @@ export default function GamePage({
       keyboardModeRef.current = true
       advanceReading()
     },
-    [advanceReading],
+    [advanceReading, markUserScrollIntent],
   )
 
   /* ---------- 内部滚动跟随 ---------- */
@@ -278,10 +329,6 @@ export default function GamePage({
     return lists[lists.length - 1]?.lastElementChild ?? null
   }, [])
 
-  const markUserScrollIntent = useCallback(() => {
-    userScrollIntentRef.current = true
-  }, [])
-
   /**
    * 只要当前块还在视野里，就认为玩家在跟读。
    *
@@ -291,12 +338,20 @@ export default function GamePage({
    */
   const handleReadingScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
-      // 不是玩家滚的就不改跟随状态：程序滚动不该关掉自动跟随。
-      if (!userScrollIntentRef.current) return
-
-      userScrollIntentRef.current = false
-
       const container = event.currentTarget
+      const decision = classifyReadingScroll({
+        now: Date.now(),
+        lastUserIntentAt: lastUserScrollIntentAtRef.current,
+        pending: programmaticScrollRef.current,
+        scrollTop: container.scrollTop,
+      })
+
+      // 到位、超时或被玩家接管，护栏就此结束。
+      if (!decision.keepPending) programmaticScrollRef.current = null
+
+      // 不是玩家滚的就不改跟随状态：程序滚动不该关掉自动跟随。
+      if (!decision.fromUser) return
+
       const target = currentBlockElement()
 
       if (!target) return
@@ -312,7 +367,8 @@ export default function GamePage({
   // 换展示序列时恢复自动跟随，旧序列的滚动判断不会影响新序列。
   useEffect(() => {
     followCurrentBlockRef.current = true
-    userScrollIntentRef.current = false
+    lastUserScrollIntentAtRef.current = 0
+    programmaticScrollRef.current = null
   }, [reading.sequenceKey])
 
   // 用键盘读到一半时换了展示序列，焦点会掉回 body；这里只接回丢掉的焦点。
@@ -346,14 +402,18 @@ export default function GamePage({
 
     if (!target) return
 
-    scrollBlockIntoContainerView(container, target, reading.reducedMotion ? 'auto' : 'smooth')
+    const top = scrollBlockIntoContainerView(container, target)
+
+    if (top === null) return
+
+    // 立护栏：这次滚动自己发出的 scroll 事件不能被当成「玩家翻走了」。
+    programmaticScrollRef.current = { top, deadline: Date.now() + PROGRAMMATIC_SCROLL_GUARD_MS }
   }, [
     currentBlockElement,
     reading.sequenceKey,
     reading.blockIndex,
     reading.blockComplete,
     reading.sequenceComplete,
-    reading.reducedMotion,
   ])
 
   const visibleChoices = showingResponse ? [] : getVisibleChoices(node.choices, state)

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  USER_SCROLL_INTENT_WINDOW_MS,
+  classifyReadingScroll,
   isTargetVisibleInContainer,
   resolveContainerScrollDelta,
 } from '../src/utils/readingScroll'
@@ -67,5 +69,91 @@ describe('isTargetVisibleInContainer', () => {
   it('边缘只差几像素时按 margin 算作不可见，避免抖动', () => {
     expect(isTargetVisibleInContainer(container, bounds(495, 100))).toBe(false)
     expect(isTargetVisibleInContainer(container, bounds(490, 100))).toBe(true)
+  })
+})
+
+describe('classifyReadingScroll', () => {
+  const now = 10_000
+
+  /** 一次正在进行的程序滚动：目标 500，还没到期。 */
+  const pending = { top: 500, deadline: now + 200 }
+
+  it('刚滚过滚轮／触摸／滚动键，这次 scroll 算玩家滚的', () => {
+    const decision = classifyReadingScroll({
+      now,
+      lastUserIntentAt: now - 50,
+      pending: null,
+      scrollTop: 120,
+    })
+
+    expect(decision.fromUser).toBe(true)
+  })
+
+  it('玩家接管滚动时，进行中的程序滚动就此作废', () => {
+    const decision = classifyReadingScroll({
+      now,
+      lastUserIntentAt: now - 50,
+      pending,
+      scrollTop: 300,
+    })
+
+    expect(decision).toEqual({ fromUser: true, keepPending: false })
+  })
+
+  it('自己刚发起的滚动归给程序，不改跟随状态', () => {
+    const decision = classifyReadingScroll({
+      now,
+      lastUserIntentAt: 0,
+      pending,
+      scrollTop: 300,
+    })
+
+    expect(decision).toEqual({ fromUser: false, keepPending: true })
+  })
+
+  it('滚到目标位置就算确认到位，护栏随之解除', () => {
+    const decision = classifyReadingScroll({
+      now,
+      lastUserIntentAt: 0,
+      pending,
+      scrollTop: 500,
+    })
+
+    expect(decision).toEqual({ fromUser: false, keepPending: false })
+  })
+
+  it('护栏超时后不再认领后续事件', () => {
+    const decision = classifyReadingScroll({
+      now: pending.deadline + 1,
+      lastUserIntentAt: 0,
+      pending,
+      scrollTop: 300,
+    })
+
+    expect(decision.keepPending).toBe(false)
+  })
+
+  it('过期的滚动意图不会被程序滚动认领成玩家滚动', () => {
+    // 已经滚到底还继续滚轮：留下了意图却没有 scroll 事件。
+    // 意图过期之后，随后那次程序滚动的中间帧不能被算成「玩家翻走了」。
+    const decision = classifyReadingScroll({
+      now,
+      lastUserIntentAt: now - USER_SCROLL_INTENT_WINDOW_MS - 1,
+      pending,
+      scrollTop: 300,
+    })
+
+    expect(decision.fromUser).toBe(false)
+  })
+
+  it('既没有输入意图也没有程序滚动时保持现状', () => {
+    const decision = classifyReadingScroll({
+      now,
+      lastUserIntentAt: 0,
+      pending: null,
+      scrollTop: 300,
+    })
+
+    expect(decision).toEqual({ fromUser: false, keepPending: false })
   })
 })
