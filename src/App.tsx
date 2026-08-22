@@ -5,6 +5,7 @@ import EndingPage from './pages/EndingPage'
 import DataErrorPage from './pages/DataErrorPage'
 import type {
   EndingDefinition,
+  EndingVariant,
   StoryBlock,
   StoryChapterMeta,
   StoryChoice,
@@ -69,7 +70,10 @@ type ResponseStage = {
 
 type EndingStage = {
   resolution: EndingResolution
+  /** 结局家族：正文与共用报告。 */
   definition: EndingDefinition
+  /** 命中的玩家可见结局：标题、副标题、状态摘要与变体段落。 */
+  variant: EndingVariant
 }
 
 type BootSession = {
@@ -106,10 +110,10 @@ function createBootSession(): BootSession {
   }
 
   const resolution = getEnding(saved)
-  const definition = getEndingDefinition(resolution.endingId)
+  const lookup = getEndingDefinition(resolution.variantId)
 
   // 校验时已确认完成存档能推导出结局，这里只是不信任地再确认一次。
-  if (!definition) {
+  if (!lookup) {
     clearStorySave()
     return fresh
   }
@@ -117,7 +121,7 @@ function createBootSession(): BootSession {
   return {
     screen: 'ending',
     state: saved,
-    ending: { resolution, definition },
+    ending: { resolution, definition: lookup.ending, variant: lookup.variant },
     resumable: null,
   }
 }
@@ -238,17 +242,17 @@ export default function App() {
     }
 
     const resolution = getEnding(next)
-    const definition = getEndingDefinition(resolution.endingId)
+    const lookup = getEndingDefinition(resolution.variantId)
 
-    if (!definition) {
-      reportDataError(`找不到结局定义：${resolution.endingId}（规则 ${resolution.ruleId}）。`)
+    if (!lookup) {
+      reportDataError(`找不到结局定义：${resolution.variantId}（规则 ${resolution.ruleId}）。`)
       return false
     }
 
     const completed: StoryState = { ...next, completed: true }
 
     setState(completed)
-    setEnding({ resolution, definition })
+    setEnding({ resolution, definition: lookup.ending, variant: lookup.variant })
     saveStorySave(completed)
     return true
   }
@@ -463,6 +467,7 @@ export default function App() {
         return (
           <EndingPage
             ending={view.stage.definition}
+            variant={view.stage.variant}
             resolution={view.stage.resolution}
             state={state}
             onRestart={handleStartNewRun}

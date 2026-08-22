@@ -1,5 +1,4 @@
 import type { Stats } from '../../types/game'
-import type { EndingDefinition } from '../../types/story'
 import { deriveAiStatusMeters } from '../aiStatus'
 import { blocksToPlainText } from './blockText'
 import type { EndingView } from './getEnding'
@@ -29,14 +28,14 @@ export type EndingReportLabels = {
  * 纯函数：同样的输入永远得到同样的字符串，方便直接单测。
  */
 export function buildEndingReportText(
-  ending: EndingDefinition,
   view: EndingView,
   stats: Stats,
   labels: EndingReportLabels,
 ): string {
   const sections: string[] = [labels.heading]
 
-  sections.push(`${labels.endingLabel}${ending.title}`)
+  // 结局名用玩家看到的那个（变体标题），不是家族名。
+  sections.push(`${labels.endingLabel}${view.title}`)
 
   const report = blocksToPlainText(view.reportBlocks)
 

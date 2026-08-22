@@ -26,10 +26,11 @@ export function logEndingSummary(
   const group = console.groupCollapsed ?? console.log
   const groupEnd = console.groupEnd ?? (() => {})
 
-  group.call(console, `[ending] ${resolution.endingId} / ${resolution.ruleId}`)
+  group.call(console, `[ending] ${resolution.variantId} / ${resolution.ruleId}`)
 
   console.log('规则', {
     endingId: resolution.endingId,
+    variantId: resolution.variantId,
     ruleId: resolution.ruleId,
     usedFallback: resolution.usedFallback,
     理论路径占比: `${(rate * 100).toFixed(1)}%`,

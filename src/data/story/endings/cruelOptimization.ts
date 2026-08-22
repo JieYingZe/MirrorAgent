@@ -3,20 +3,27 @@ import { pathEchoes } from './pathEchoes'
 
 export const cruelOptimizationEnding = {
   id: 'cruel_optimization',
-  title: '残酷优化',
-  subtitle: '所有误差已在出现以前被修正。',
+  variants: [
+    {
+      id: 'cruel_optimization',
+      title: '残酷优化',
+      subtitle: '所有误差已在出现以前被修正。',
+    },
+  ],
   preludeVariants: [
     {
       id: 'cruel_optimization_after_identity',
       when: {
-        op: 'finalChoice',
-        equals: 'ask_identity',
+        op: 'hasChoice',
+        choiceId: 'ch5_ask_identity',
       },
       blocks: [
         {
           kind: 'narration',
           text: `身份解析结束。
+
 你没有撤销代理。
+
 你要求系统继续运行，并停止讨论它是否像你。`,
         },
       ],

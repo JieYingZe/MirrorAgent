@@ -19,8 +19,9 @@
 | 数据系统 | G02 | 状态与变量系统 | `Stats`、选择记录、当前节点 | P0 | 已完成 | 点击选择后变量正确变化 | 已建立四变量初始状态（全部为 0）与不可变累计更新；初版的 `src/utils/gameState.ts` 已由 `src/utils/story/storyState.ts`、`applyChoice.ts` 替换，进度字段从 `currentChapterId` 升级为 `currentNodeId`；当前状态仅存于内存，localStorage 留待 I03 |
 | 数据系统 | G03 | 新剧情引擎骨架 | `src/types/story.ts`、`src/data/story/`、`src/utils/story/`、`src/components/story/` | P0 | 已完成 | 节点式数据、条件、分支、渲染与结局规则接口可运行 | 详见下方“G03 说明” |
 | 内容实现 | C01 | 写入正式剧情 | 序章 + 五章剧情 | P0 | 已完成 | 序章与五章全部节点化：每个剧情节点 3–6 段文本，每个选择节点 3–4 个选项，一章包含多个选择节点 | `story-source/01`–`07` 已全部转换为运行时数据：65 个节点、20 个选择节点、80 个选项，序章→第五章全线可达并可通关。详见下方“C01 / C02 / R01 集成检查” |
-| 内容实现 | C02 | 结局文案 | 5 个结局 | P0 | 已完成 | 每个结局都有标题、正文、AI 镜像报告 | 五个结局的正文、镜像报告与结尾句已录入；路径回声改为五个结局共用的 `endings/pathEchoes.ts`（22 条，按章分组）。浏览器实测五个结局均可正常进入并渲染 |
-| 规则实现 | R01 | 结局判断逻辑 | `src/utils/story/getEnding.ts`、`src/data/story/rules/endingRules.ts` | P0 | 已完成 | 不同路径能触发不同结局 | 已按 `story-source/08-ending-rules.md` 实现：mirror_trap 最高优先级、强授权去重计数、`ask_identity` 四种去向、缺失 finalChoice 的安全兜底；兜底不会返回 mirror_trap 或 active_disconnection。已接入正式剧情并通过单元测试（`npm test`）与 20000 条抽样路径模拟 |
+| 内容实现 | C02 | 结局文案 | 6 个结局家族 / 11 个玩家可见结局 | P0 | 已完成 | 每个玩家可见结局都有标题、副标题、状态摘要、正文与 AI 镜像报告 | 家族正文 + 变体段落的结构（见下方“R02 结局系统重构”）；路径回声改为各家族共用的 `endings/pathEchoes.ts`（22 条，按章分组） |
+| 规则实现 | R01 | 结局判断逻辑 | `src/utils/story/getEnding.ts`、`src/data/story/rules/endingRules.ts` | P0 | 已完成 | 不同路径能触发不同结局 | 已按 `story-source/08-ending-rules.md` 实现声明式优先级规则、强授权去重计数与安全兜底。规则内容已由 R02 整体重写 |
+| 规则实现 | R02 | 结局系统重构 | `rules/endingRules.ts`、`endings/`、`chapters/chapter5.ts`、`types/story.ts` | P0 | 已完成 | 11 个玩家可见结局全部可达；三个最终行为不改四变量；`ask_identity` 不再是 finalChoice | 最终行为收敛为三个且不修改四变量；结局改为 6 家族 / 11 变体；新增 `silent_delegation`；阈值按精确联合分布卷积重新设计；存档 `schemaVersion` 升到 3。详见下方“R02 说明” |
 | 交互体验 | I01 | 打字机效果与阅读节奏 | `useStoryReadingSequence` + `utils/story/reading*` | P1 | 已完成 | 文本逐字显示，可点击跳过当前段 | 统一阅读状态机 + 固定高度剧情阅读区 + 自动播放开关。已做两次验收修订：①剧情区改为受控高度的独立滚动容器、自动跟随只滚容器不滚页面；②自动播放默认关闭并交给独立的本地用户偏好，开关关闭时立即补全当前 block 并停住，开启时一次点击看完当前展示序列，推进热区扩大到舞台空白。详见下方“I01 说明”。没有实现 `TypewriterText` 组件：揭示是整段序列的状态，不是单个文本组件的私有状态 |
 | 交互体验 | I02 | AI 状态面板 | `AiStatusPanel` | P1 | 已完成 | 不直接显示数字，而显示状态描述 | 四变量经 `src/utils/aiStatus.ts` 的纯映射转成状态文案（语气／反馈／权限／边界，每个变量五档；V03 起标签最多两字、状态文案统一四字以内），区间与结局阈值对齐、首末档向 ±∞ 开放，NaN 与缺字段回落到初始档；面板只展示，不写回 `StoryState`。GamePage 传入最新 `stats`，因此显示选项专属回应时也会立即更新，并尊重节点的 `ui.hideStatusPanel` 与 `ui.mode: 'control'`（仅边框与提示语变化）。桌面 260–300px 右栏（V03 起每行带图标与英文副标）、≤900px 两列紧凑卡片、≤768px 隐藏图标与英文副标，320px 无换行无横向滚动。`tests/aiStatus.test.ts` 18 个用例覆盖区间边界、初始值、剧情实际取值范围与 ±1000／±Infinity |
 | 交互体验 | I03 | 本地存档 | localStorage | P1 | 已完成 | 刷新后可继续，结局后可重开 | 存档键 `mirror-agent:story-save`，直接持久化正式 `StoryState`（见下方“I03 说明”）。`src/utils/story/storySave.ts` 提供 load / save / clear / validate，恢复前逐字段校验并复用正式剧情索引；损坏、旧版本、引用失效的存档安全清除后按无存档处理，localStorage 不可用时静默降级为不保存。存档只处理剧情状态，音频偏好仍属 A01 且必须使用独立键 |
@@ -92,13 +93,13 @@
 ### 已完成
 
 - **节点式数据**：`src/data/story/` 按 manifest + 分章 TypeScript 数据模块组织，章节和结局文件都是纯声明式对象并用 `satisfies` 校验；旧的单个 `story.json` 及其类型、校验和状态工具已删除，不存在双轨逻辑。
-- **状态**：`StoryState` 升级到节点级（`schemaVersion: 2`、`currentNodeId`、`stats`、`choiceHistory`、`tags`、`flags`、`visitedNodeIds`、`finalChoice`、`completed`），视觉章节由节点的 `chapterId` 推导。状态仍只存在于内存，但保持可序列化，localStorage 仍属 I03。
+- **状态**：`StoryState` 升级到节点级（`schemaVersion: 3`、`currentNodeId`、`stats`、`choiceHistory`、`tags`、`flags`、`visitedNodeIds`、`finalChoice`、`completed`），视觉章节由节点的 `chapterId` 推导。状态仍只存在于内存，但保持可序列化，localStorage 仍属 I03。
 - **条件**：`StoryCondition` 支持 `all` / `any` / `not` / `stat` / `hasChoice` / `choiceCount` / `hasTag` / `flag` / `finalChoice`，章节回调、选项可见性、条件路由和结局规则共用同一套求值。
 - **分支**：简单路由与带 `fallback` 的条件路由、局部分支后汇合、选项专属 `response` 后回到主线；选择作为一次状态事务处理（stats → tags/flags → choiceHistory → finalChoice → 基于新状态解析 next），tags 与 visitedNodeIds 去重。
 - **渲染**：`StoryBlockRenderer` 覆盖 narration / dialogue / system / record / message / document / quote / divider 八种块，`GamePage` 不含任何按节点 ID 的剧情逻辑。逐段揭示已在 I01 加上：不传 `reveal` 时仍是一次性完整显示（结局页即如此）。
 - **结局规则接口**：见 R01。
 - **错误状态**：找不到节点、路由目标缺失、节点无出口、结局定义缺失都会显示统一的“实验数据损坏”页并可返回开始页，控制台输出具体原因，不会白屏。
-- **数据验证**：`npm run validate:story`（tsx 运行 `scripts/validate-story.ts`），覆盖 ID 唯一性、入口与路由目标存在、条件路由 fallback、可达性、死路、循环、`finalChoice` 只用于 final 选择、exploration 零变量影响、roleplay 轻量限制、结局规则引用有效性、五个结局可达、mirror_trap 严格条件与最高优先级、缺失 finalChoice 的兜底安全性、理论占比数据一致性，并输出图结构报告。正式剧情的组合数约为 4²⁰，无法穷举，路径模拟采用固定种子的确定性抽样并强制覆盖每一个选项。
+- **数据验证**：`npm run validate:story`（tsx 运行 `scripts/validate-story.ts`），覆盖 ID 唯一性、入口与路由目标存在、条件路由 fallback、可达性、死路、循环、`finalChoice` 只用于 final 选择、exploration 零变量影响、roleplay 轻量限制、结局规则引用有效性、11 个玩家可见结局可达、家族与变体不漂移、mirror_trap 严格条件与最高优先级、边界重建优先于脆弱边界、三个最终行为不修改四变量、缺失最终行为的兜底安全性、理论占比数据一致性，并输出图结构报告。正式剧情的组合数约为 4²⁰，无法穷举，路径模拟采用固定种子的确定性抽样并强制覆盖每一个选项。
 
 ### 尚未完成
 
@@ -694,7 +695,7 @@ effect 都不会重复播放，离开场景后闸门重新装填，重新初始�
 保存 `schemaVersion` / `currentNodeId` / `stats` / `choiceHistory` / `tags` / `flags` / `visitedNodeIds` / `finalChoice` / `completed`。
 不保存剧情正文、节点或结局对象、当前可见块、页面 screen、`responseStage`、临时快照、`currentStats` 展示副本、按钮锁与滚动状态、音频偏好，以及任何能由正式数据重新推导的内容（结局 ID 与结局正文都在刷新后用 `getEnding` 重新推导）。
 
-版本以 `storyManifest.schemaVersion` 为唯一来源，当前阶段不迁移旧版本；带 `version` / `currentChapterId` / `choices` 的旧存档一律判为不兼容。
+版本以 `storyManifest.schemaVersion` 为唯一来源，当前阶段不迁移旧版本；带 `version` / `currentChapterId` / `choices` 的旧存档一律判为不兼容。结局系统重构（R02）后版本从 2 升到 3，改版以前的存档在版本检查这一步就整份作废。
 
 ### 保存时机
 
@@ -718,7 +719,7 @@ effect 都不会重复播放，离开场景后闸门重新装填，重新初始�
 | 损坏 / 旧版本 / 引用失效 | 尝试清除后按无存档处理，删除失败也不会被恢复 |
 | localStorage 不可用 | 按无存档处理，全程可正常游玩，只是不保存 |
 
-校验会检查根值类型、`schemaVersion`、`currentNodeId` 存在性、四个 stats 为有限数字、`choiceHistory` 引用的节点／章节／选项及类型仍然一致、tags 与 flags 值类型、`visitedNodeIds` 存在性、`finalChoice` 合法性、`completed` 类型，并维护完成状态不变量（未完成存档不得停在结局门；完成存档必须停在结局门、写入 `finalChoice`、能重新推导出有效结局）。校验通过后返回重新组装的干净状态，存档里的多余字段不会进入内存。
+校验会检查根值类型、`schemaVersion`、`currentNodeId` 存在性、四个 stats 为有限数字、`choiceHistory` 引用的节点／章节／选项及类型仍然一致、tags 与 flags 值类型、`visitedNodeIds` 存在性、`finalChoice` 合法性、`completed` 类型，并维护完成状态不变量（未完成存档不得停在结局门；完成存档必须停在结局门，并且能被现行规则重新推导成一个正式结局 —— 命中安全兜底即判为不兼容。镜像困局路径没有 `finalChoice`，因此不再单独要求这个字段）。校验通过后返回重新组装的干净状态，存档里的多余字段不会进入内存。
 
 `getItem` / `setItem` / `removeItem` / `JSON.parse` 与读取 `localStorage` 属性本身都各自容错，任何失败都不会抛到 React 渲染层，也不会显示阻断式错误页。
 
@@ -737,7 +738,7 @@ effect 都不会重复播放，离开场景后闸门重新装填，重新初始�
 
 ## C01 / C02 / R01 集成检查（2026-07-28）
 
-正式剧情、五个结局、路径回声与结局规则接入现有运行时后的一次完整检查与修复。
+正式剧情、结局、路径回声与结局规则接入现有运行时后的一次完整检查与修复。本节记录的是当时的五结局结构，已由 R02 重构。
 
 ### 检查结果
 
@@ -749,8 +750,8 @@ effect 都不会重复播放，离开场景后闸门重新装填，重新初始�
 | `npm run validate:story` | 通过，0 error / 0 warning |
 
 - 图结构：65 个节点全部可达、全部能到达结局门，无循环、无死路。
-- 抽样模拟：20000 条确定性路径，覆盖 65/65 节点与 80/80 选项；五个结局与四个 `finalChoice` 全部可达，不存在“未写入 finalChoice 就到达结局门”的路径。
-- 浏览器实测：序章→第五章逐章通过，五个结局（温柔幻觉 / 共生工具 / 主动断联 / 残酷优化 / 镜像困局）均能正常进入并渲染镜像报告与路径回声，控制台无错误。
+- 抽样模拟：20000 条确定性路径，覆盖 65/65 节点与 80/80 选项；当时的五个结局与四个 `finalChoice` 全部可达。（结局结构已由 R02 重构，最新数据见下方 R02 说明。）
+- 浏览器实测：序章→第五章逐章通过，当时的五个结局均能正常进入并渲染镜像报告与路径回声，控制台无错误。
 
 ### 本次修复的集成问题
 
@@ -766,4 +767,131 @@ effect 都不会重复播放，离开场景后闸门重新装填，重新初始�
 ### 需要留意
 
 - **roleplay 变量规则已放宽**（经确认）：`docs/06` §8.1 由“只能 +1”改为“每次通常影响一个变量，幅度只能 +1 或 -1；最多两个变量，总绝对变化量不超过 2；不得写入 finalChoice 或承担关键权限变更”。相应地，`ch4_tone_demand_unfiltered` 从影响三个变量收敛为 `honesty +1 / gentleness -1`（去掉了 `selfAcceptance +1`）。
-- `endingRates` 仍是设计文档给出的理论值。抽样模拟的实际分布为 symbiosis 34.3% / active_disconnection 30.5% / cruel_optimization 16.6% / soft_illusion 16.5% / mirror_trap 2.0%，与现有数值基本吻合，暂未改写。
+- ~~`endingRates` 仍是设计文档给出的理论值~~：已在 R02 用精确联合分布卷积重新生成，见下方「R02 结局系统重构说明」。
+
+---
+
+## R02 结局系统重构说明（2026-08-22）
+
+### 为什么改
+
+旧规则里，最终一次点击的权重过大：`close_agent` 直接等于主动断联、`tool_only` 直接等于共生工具，
+而且这一次点击本身还会把四变量再改动 ±2 ／ ±3。结果是前面二十次选择基本只影响报告措辞。
+
+新的核心原则：
+
+```txt
+最终行为决定「玩家最后做了什么」。
+此前累计的四变量、强授权记录和边界收回记录
+决定「这个行为最终意味着什么」。
+```
+
+### 改了什么
+
+- **最终行为收敛为三个**：`permanent_agent` / `tool_only` / `close_agent`，且**都不修改四变量**。
+- **`ask_identity` 不再是 `finalChoice`**：改为 `key` 选择 `ch5_ask_identity`，记录选择 + 标签 + `askedIdentity` flag，同样不改变量。
+  它之后进入新节点 `ch5.identity_answer`，由条件路由决定去向：满足隐藏条件直接进 `ch5.mirror_gate`，
+  否则回到新节点 `ch5.final_confirmation_after_identity`，由玩家自己按下三个真正的最终行为之一。
+  系统不替玩家推断。
+- **结局改为 6 个家族 / 11 个玩家可见结局**：家族保存正文，变体保存标题、副标题、状态摘要与专属段落。
+  新增家族 `silent_delegation`（无声代行）；`symbiosis` 拆出 4 个变体，`active_disconnection` 拆出 3 个。
+- **`EndingRule` 增加 `variantId`**：规则直接指向玩家可见结局，变体本身不带条件，规则与正文仍然只有一个真相来源。
+- **两份关键选择名单**：`STRONG_DELEGATION_CHOICE_IDS`（沿用原名单，6 项）与新增的
+  `BOUNDARY_RECOVERY_CHOICE_IDS`（第三、四章的 10 项收回选择）。
+- **`MIRROR_TRAP_CONDITION` 由规则与第五章路由共用**：两侧不可能漂移。
+- **`schemaVersion` 2 → 3**：旧存档在版本检查这一步整份作废，不做迁移；音频与自动播放偏好在另一个存储键里，不受影响。
+- **第五章 BGM 覆盖表补上三个新节点**：身份追问支线与镜像结局门不会掉回前半段的曲子。
+
+### 阈值是怎么定的
+
+先统计正式剧情的真实可达范围，再设计规则，不凭感觉写死。
+
+正式剧情里有 15 个带变量影响的选择节点，对它们做**精确联合分布卷积**（所有选项等概率，无随机、无抽样误差）：
+
+| 变量 | 理论极值 | p5 | p25 | 中位数 | p75 | p95 |
+|---|---|---:|---:|---:|---:|---:|
+| `gentleness` | −3 … 16 | 0 | 2 | 4 | 5 | 8 |
+| `honesty` | 0 … 20 | 6 | 8 | 10 | 11 | 14 |
+| `control` | −17 … 28 | −7 | −3 | 1 | 5 | 10 |
+| `selfAcceptance` | −7 … 22 | 2 | 6 | 8 | 11 | 14 |
+
+`strongDelegationCount`：0 次 17.8% / 1 次 35.6% / 2 次 29.7% / 3 次 13.2% / 4 次 3.3% / 5 次 0.4% / 6 次 0.02%。
+
+旧阈值 `honesty <= 14` 覆盖了 95% 的路径，等于没有条件 —— 这是「温柔幻觉基本只看 gentleness」的原因。
+新的语气画像改成 `gentleness >= 5 且 honesty <= 10` 与 `honesty >= 11 且 gentleness <= 4`，两者互斥。
+
+### 理论路径占比
+
+| 玩家可见结局 | 占比 |
+|---|---:|
+| 浅尝辄止 | 12.80% |
+| 无声代行 | 12.51% |
+| 稳定边界 | 10.47% |
+| 主动断联 | 10.47% |
+| 残酷优化 | 10.25% |
+| 温柔幻觉 | 9.89% |
+| 艰难抽离 | 9.39% |
+| 脆弱边界 | 9.14% |
+| 谨慎共生 | 8.36% |
+| 边界重建 | 4.67% |
+| 镜像困局 | 2.04% |
+
+除隐藏结局外最小值 4.67%，没有死区，也没有哪个结果沦为无意义的 fallback。
+`npm run validate:story` 的 20000 条抽样路径与这份精确值一致（最大偏差 0.3 个百分点）。
+
+### 占比上到了结局页
+
+占比原来只进控制台。现在它作为正式界面文案回到标题区，排在副标题同一行的最右侧：
+
+```txt
+┌────────────────────────────────────────────────────────────┐
+│                          边界重建                           │
+│         权限真的交出去过。也真的拿了回来。   ( 理论占比 约 5% ) │
+├────────────────────────────────────────────────────────────┤
+│  结局正文                    │  AI 镜像报告                  │
+```
+
+- **与副标题同一行**。结局页是固定舞台，标题区每多一行，两块正文的可读高度就少一行；
+- **副标题仍然相对整个舞台居中**。用三列网格 `1fr auto 1fr` 而不是 flex 横排：
+  两侧 fr 列宽度永远相等，副标题落在中间那列，与标题、正文对在同一条中轴上。
+  flex 横排会把副标题往左推，标题区看上去就歪了；
+- **占比靠到最右，与两块正文面板的右缘齐平** —— 舞台宽度就是面板宽度，
+  所以它读起来像页眉右上角的一条系统读数；
+- 窄屏（≤768px）改回上下两行居中排：宽度不够时副标题会被挤成三四行，
+  占比也贴不出「齐平」的意思。那时页面已经退回长滚动，多一行不再从正文身上扣高度；
+- 外形与顶栏那三个开关同一套（1px 描边 + 999px 圆角 + 等宽字）。
+  一来读起来像系统读数而不是成就徽章 —— 这一页不表扬玩家；
+  二来这套外形与副标题的正文字体差得足够远，中间又隔着大片留白，
+  不会被看成同一句话；
+- 屏幕上的标签收成四个字「理论占比」，与状态面板那几个短标同一量级；
+  六个字的「理论路径占比」排在副标题右边又长又拗口，「路径」这层意思交给悬停说明；
+- **取整到整数**，下限锁在 1%：小数会让结构模拟看起来像精确的实时统计，而「约 0%」会读成「这条路不存在」；
+- 悬停说明明确否认它是玩家达成率。
+
+取整是纯函数 `utils/story/endingRate.ts`，文案在 `data/uiContent.ts` 的 `endingContent`，
+两者都有单测兜住措辞与边界（`tests/endingRate.test.ts`）。
+
+### 验证结果
+
+| 命令 | 结果 |
+|---|---|
+| `npx tsc -b` | 通过 |
+| `npm test`（vitest，19 个文件 / 464 个用例） | 通过 |
+| `npm run validate:story` | 通过，0 error / 0 warning |
+| `npm run build` | 通过 |
+
+- 图结构：68 个节点全部可达、全部能到达两个结局门之一，无循环、无死路。
+- 抽样模拟：20000 条确定性路径，覆盖 68/68 节点与 83/83 选项；11 个玩家可见结局与三个 `finalChoice` 全部可达。
+- 新增测试：`tests/chapter5Flow.test.ts`（走真实剧情图验证最终行为不改变量、身份追问两个去向、11 个结局各自的前置路径）、
+  `tests/endingData.test.ts`（清单 / 定义 / 变体 / 规则 / 占比之间不漂移）、
+  `tests/endingRate.test.ts`（取整边界与占比文案措辞）。
+- 浏览器实测：注入存档验证「边界重建（约 5%）」与「镜像困局（约 2%）」；
+  在真实剧情图上点击身份追问 → 落到第二次确认（只有三个最终行为）→ 关闭后判定为「主动断联」；
+  控制台无 error。占比胶囊的排布（副标题居中 + 占比与面板右缘齐平）与「理论占比」这个标签
+  是实测之后按试玩反馈调的，只跑了 `npx tsc -b` 与 `npm run build`，视觉待人工验收。
+
+### 仍需人工确认
+
+- 新增与改写的结局正文（无声代行、7 个变体段落）尚未经过试玩阅读验收；
+- 浏览器实测尚未覆盖全部 11 个结局，本轮只抽查了 3 个；
+- 结局页截图未取（本次环境的浏览器面板不合成画面），布局改动是按 DOM 实测尺寸确认的。

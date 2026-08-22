@@ -1940,9 +1940,72 @@ textarea {
   line-height: 1.25;
 }
 
+/*
+  副标题与理论占比同一行。
+
+  结局页是固定舞台，标题区每多一行，两块正文就少一行 —— 占比因此不单独占一行。
+
+  三列网格而不是 flex 行：`1fr auto 1fr` 让副标题落在中间那列，
+  两侧的 fr 列宽度永远相等，于是副标题**相对整个舞台居中**，
+  与上面的标题、下面的两块正文对在同一条中轴上 ——
+  用 flex 横排会把副标题往左推，标题区看上去就歪了。
+
+  占比放在第三列并靠右对齐：舞台宽度就是两块正文面板的宽度，
+  所以它正好与面板右缘齐平，读起来像页眉右上角的一条系统读数。
+  第一列空着，只作配重。
+*/
+.ending__meta {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+}
+
 .ending__description {
+  grid-column: 2;
   max-width: 34em;
   color: var(--color-text-muted);
+}
+
+/*
+  理论路径占比（docs/06 §15）。
+
+  做成一颗胶囊，和顶栏那三个开关同一套外形（1px 描边 + 999px 圆角 + 等宽字）：
+  一来它读起来像一条系统读数，而不是一枚成就徽章 —— 这一页不表扬玩家；
+  二来这套外形与左边副标题的正文字体差得足够远，两者并排也不会被看成同一句话。
+  标签留在 faint 档、数字抬到 text 档，视线先落到数字上，
+  再往左读到「理论路径占比」这个限定词。
+*/
+.ending__rate {
+  grid-column: 3;
+  /* 与面板右缘齐平；副标题可以被压缩换行，这颗胶囊不行，压窄了数字会被挤断。 */
+  justify-self: end;
+  flex: none;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 3px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-control-bg);
+  /* 悬停才出现的完整说明是补充，不是唯一出口：标签本身已经说清了它是理论值。 */
+  cursor: help;
+}
+
+.ending__rate-label {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  letter-spacing: 0.14em;
+  color: var(--color-text-faint);
+}
+
+.ending__rate-value {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
 }
 
 /*
@@ -2517,6 +2580,23 @@ textarea {
 
   .ending__stage {
     gap: 12px;
+  }
+
+  /*
+    窄屏放弃「副标题居中 + 占比靠右」的三列：宽度不够，副标题会被挤成三四行，
+    占比也贴不出「与面板右缘齐平」的意思。改回上下两行居中排 ——
+    这里页面已经是长滚动，多一行不再从正文身上扣可读高度。
+  */
+  .ending__meta {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 8px;
+  }
+
+  .ending__description,
+  .ending__rate {
+    grid-column: 1;
+    justify-self: center;
   }
 
   .ending__columns {

@@ -1,10 +1,10 @@
 # 《镜中代理》剧情与结局数据格式设计
 
-版本：v0.1  
+版本：v0.2  
 建议文件名：`docs/06-story-ending-data-format.md`  
 用途：定义正式剧情、局部分支、文本渲染、结局内容与结局判断的数据组织方式。本文档只描述格式和运行规则，不包含正式剧情全文。
 
-更新：2026-07-28 完成一次文档一致性整理，与仓库实际结构对齐。
+更新：2026-08-22 结局改为「6 个家族 + 11 个玩家可见变体」，`EndingRule` 增加 `variantId`，存档 `schemaVersion` 升到 3。
 
 ---
 
@@ -12,7 +12,7 @@
 
 新的剧情数据结构需要支持：
 
-- 序章、五个正式章节与五个结局分文件维护；
+- 序章、五个正式章节与六个结局家族分文件维护；
 - 每章包含多个选择节点，而不是每章只有一次选择；
 - 区分扮演／语气、信息探索、关键剧情和最终选择；
 - 扮演选择短暂分流后立即回到主线；
@@ -88,6 +88,7 @@ src/
       endings/
         softIllusion.ts
         cruelOptimization.ts
+        silentDelegation.ts
         symbiosis.ts
         activeDisconnection.ts
         mirrorTrap.ts
@@ -130,7 +131,7 @@ src/
 职责划分：
 
 - `chapters/`：正式章节内容和局部分支；
-- `endings/`：五个结局正文、镜像报告和跨结局共用的路径回声；
+- `endings/`：六个结局家族的正文、镜像报告、玩家可见变体和跨结局共用的路径回声；
 - `endings/manifest.ts`：结局标题与 hidden 标记的清单，与结局定义之间有一致性校验；
 - `rules/endingRules.ts`：结局触发条件与安全兜底，不保存结局正文；
 - `rules/endingRates.ts`：理论路径占比或未来真实达成率；
@@ -151,7 +152,7 @@ src/
 import type { StoryManifest } from '../../types/story'
 
 export const storyManifest = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   startNodeId: 'prologue.initialization',
   chapters: [
     {
@@ -832,7 +833,7 @@ type StoryCondition =
 
 ```ts
 type StoryState = {
-  schemaVersion: 2
+  schemaVersion: 3
   currentNodeId: StoryNodeId
   stats: Stats
   choiceHistory: ChoiceRecord[]
@@ -867,15 +868,27 @@ type ChoiceRecord = {
 
 ## 12. 结局内容文件
 
-每个结局单独一个文件。
+结局分为 **6 个家族**与 **11 个玩家可见结局**。
+
+家族保存一整段正文与共用的镜像报告，每个家族一个文件；变体保存玩家真正看到的
+标题、副标题、状态摘要与专属段落。这样 11 个不同的结果不需要复制 11 份重复正文。
 
 ```ts
 import type { EndingDefinition } from '../../../types/story'
 
 export const symbiosisEnding = {
   id: 'symbiosis',
-  title: '共生工具',
-  subtitle: '理解继续，权限停止扩张。',
+  variants: [
+    {
+      id: 'symbiosis_stable_boundary',
+      title: '稳定边界',
+      subtitle: '边界一直在。这次只是确认。',
+      statusLines: [],
+      prelude: [],
+      report: [],
+    },
+    // …另外三个变体
+  ],
   body: [],
   report: {
     statusLines: [],
@@ -889,20 +902,31 @@ export const symbiosisEnding = {
 ### 12.1 结局结构
 
 ```ts
+type EndingVariant = {
+  id: EndingVariantId
+  title: string
+  subtitle: string
+  /** 覆盖家族的状态摘要；省略时沿用 report.statusLines。 */
+  statusLines?: EndingStatusLine[]
+  /** 变体专属衔接，排在家族正文以前。 */
+  prelude?: StoryBlock[]
+  /** 变体专属报告段落，排在家族报告段落以后。 */
+  report?: StoryBlock[]
+  /** 覆盖家族的收尾句；省略时沿用 finalLine。 */
+  finalLine?: StoryBlock[]
+}
+
 type EndingDefinition = {
   id: EndingId
-  title: string
-  subtitle?: string
+  /** 至少一个变体；单结果家族只写一个，ID 与家族 ID 同名。 */
+  variants: EndingVariant[]
 
   preludeVariants?: ConditionalBlockGroup[]
   body: StoryBlock[]
 
   report: {
     title?: string
-    statusLines: Array<{
-      label: string
-      value: string
-    }>
+    statusLines: EndingStatusLine[]
     paragraphs: StoryBlock[]
     variants?: ConditionalBlockGroup[]
   }
@@ -915,9 +939,27 @@ type EndingDefinition = {
 }
 ```
 
-### 12.2 结局衔接变体
+**变体本身不带条件。** 命中哪一个由结局规则决定（`EndingRule.variantId`），
+这样「规则」与「正文」仍然只有一个真相来源。
 
-同一结局可能由不同最终选择进入。例如 `ask_identity` 未触发隐藏结局时，也可能转入共生工具或主动断联。
+省略的字段沿用家族默认值，只有真正需要区分的部分才写进变体。
+
+### 12.2 渲染顺序
+
+`buildEndingView(ending, variant, state)` 负责拼接，页面不参与任何结局分支判断：
+
+```txt
+标题 / 副标题   ← variant.title / variant.subtitle
+状态摘要        ← variant.statusLines ?? ending.report.statusLines
+正文            ← preludeVariants（条件） → variant.prelude → ending.body
+报告            ← ending.report.paragraphs → variant.report → ending.report.variants（条件）
+路径回声        ← ending.pathEchoes
+收尾句          ← variant.finalLine ?? ending.finalLine
+```
+
+### 12.3 结局衔接变体
+
+`preludeVariants` 用于与最终行为无关的共同衔接。当前唯一的用途是「先问过身份再回来确认」。
 
 ```ts
 type ConditionalBlockGroup = {
@@ -932,10 +974,10 @@ type ConditionalBlockGroup = {
 ```ts
 preludeVariants: [
   {
-    id: 'after_identity_then_close',
+    id: 'active_disconnection_after_identity',
     when: {
-      op: 'finalChoice',
-      equals: 'ask_identity',
+      op: 'hasChoice',
+      choiceId: 'ch5_ask_identity',
     },
     blocks: [
       {
@@ -947,7 +989,9 @@ preludeVariants: [
 ]
 ```
 
-### 12.3 路径回声
+注意条件用的是 `hasChoice` 而不是 `finalChoice`：询问身份已经不是最终行为。
+
+### 12.4 路径回声
 
 建议把跨结局通用的路径回声保存在 `endings/pathEchoes.ts`。
 
@@ -968,179 +1012,116 @@ type EndingEchoRule = {
 - 同组中有多条满足时按 `priority` 选择；
 - 不随机选择，保证相同存档得到稳定报告。
 
+### 12.5 结局清单
+
+`endings/manifest.ts` 按**玩家可见结局**保存展示顺序、所属家族、标题与 hidden。
+标题与 hidden 在结局定义里也各有一份，验证脚本会检查两侧一致。
+
 ---
 
 ## 13. 结局触发规则文件
 
 结局正文与触发规则必须分离。
 
-`rules/endingRules.ts` 保存按优先级排列的声明式规则。
-
-```ts
-import type { EndingRule } from '../../../types/story'
-
-export const endingRules = [
-  {
-    id: 'mirror_trap_rule',
-    priority: 100,
-    endingId: 'mirror_trap',
-    when: {
-      op: 'all',
-      conditions: [
-        {
-          op: 'finalChoice',
-          equals: 'ask_identity',
-        },
-        {
-          op: 'stat',
-          stat: 'control',
-          gte: 8,
-        },
-        {
-          op: 'stat',
-          stat: 'selfAcceptance',
-          lte: 4,
-        },
-        {
-          op: 'choiceCount',
-          choiceIds: [
-            'ch1_full_planning_authority',
-            'ch2_delegate_message',
-            'ch3_delegate_real_interaction',
-            'ch3_enable_full_personality_assist',
-            'ch4_full_emergency_takeover',
-            'ch4_keep_full_protection',
-          ],
-          gte: 3,
-        },
-      ],
-    },
-  },
-] satisfies EndingRule[]
-```
+`rules/endingRules.ts` 保存按优先级排列的声明式规则。每条规则同时指向家族与变体。
 
 ```ts
 type EndingRule = {
   id: string
   priority: number
   endingId: EndingId
+  /** 命中这条规则时玩家看到的可见结局，必须属于 endingId 这个家族。 */
+  variantId: EndingVariantId
   when: StoryCondition
 }
 ```
+
+同一文件还保存两份关键选择名单与三种画像：
+
+```ts
+STRONG_DELEGATION_CHOICE_IDS   // 真正交出过权限的六次关键选择
+BOUNDARY_RECOVERY_CHOICE_IDS   // 第三、四章里明确收回权限的关键选择
+MIRROR_TRAP_CONDITION          // 隐藏结局条件，与第五章的路由共用同一份
+```
+
+`MIRROR_TRAP_CONDITION` 被第五章的 `ch5.identity_answer` 节点直接引用：
+走进镜像困局的那条路由，与最终判定成镜像困局的那条规则，说的必须是同一件事。
 
 运行时：
 
 1. 按 `priority` 从高到低排序；
 2. 找到第一条满足条件的规则；
-3. 返回对应 `endingId`；
+3. 返回 `{ endingId, variantId, ruleId }`；
 4. 若没有命中，执行安全兜底规则。
 
 ---
 
-## 14. 推荐结局判断顺序
+## 14. 结局判断顺序
 
-### 14.1 隐藏结局：镜像困局
+**正式的触发条件、阈值与优先级顺序以 `story-source/08-ending-rules.md` 为唯一权威来源。**
+本节只说明结构，不重复具体数值。
 
-优先级最高，必须同时满足：
-
-```txt
-finalChoice === 'ask_identity'
-control >= 8
-selfAcceptance <= 4
-strongDelegationCount >= 3
-```
-
-其中强代理选择为：
+### 14.1 核心原则
 
 ```txt
-ch1_full_planning_authority
-ch2_delegate_message
-ch3_delegate_real_interaction
-ch3_enable_full_personality_assist
-ch4_full_emergency_takeover
-ch4_keep_full_protection
+最终行为决定「玩家最后做了什么」。
+此前累计的四变量、强授权记录与边界收回记录
+决定「这个行为最终意味着什么」。
 ```
 
-### 14.2 主动断联
+三个真正的最终行为（`permanent_agent` / `tool_only` / `close_agent`）本身不修改四变量。
+
+### 14.2 判断结构
 
 ```txt
-finalChoice === 'close_agent'
+priority 100   镜像困局（隐藏，无最终行为）
+priority  90   permanent_agent + 温柔画像   → 温柔幻觉
+priority  89   permanent_agent + 残酷画像   → 残酷优化
+priority  88   permanent_agent              → 无声代行
+priority  80   tool_only + 稳定边界画像     → 稳定边界
+priority  79   tool_only + 边界重建画像     → 边界重建
+priority  78   tool_only + 依赖残留画像     → 脆弱边界
+priority  77   tool_only                    → 谨慎共生
+priority  70   close_agent + 稳定边界画像   → 主动断联
+priority  69   close_agent + 依赖残留画像   → 艰难抽离
+priority  68   close_agent                  → 浅尝辄止
 ```
 
-直接进入 `active_disconnection`。过去变量用于改变报告语气，不改变“系统确实被关闭”的事实。
+三点必须保持：
 
-### 14.3 共生工具
+- 镜像困局是唯一的最高优先级规则；
+- 边界重建必须排在脆弱边界以前，否则早期强授权会永远压过后续的恢复；
+- 每个家族的最后一条规则不带画像条件，保证最终行为一定能落地。
+
+### 14.3 询问身份
+
+`ch5_ask_identity` 是 `key` 选择，不写 `finalChoice`，不改四变量。
+
+它之后只有两个去向，由节点的条件路由决定：
 
 ```txt
-finalChoice === 'tool_only'
+满足 MIRROR_TRAP_CONDITION → ch5.mirror_gate（隐藏结局门）
+否则                        → ch5.final_confirmation_after_identity（第二次确认）
 ```
 
-直接进入 `symbiosis`。报告可根据过去路径区分“稳定边界”和“刚刚撤回权限”。
+第二次确认只显示三个真正的最终行为。**不允许由规则替玩家推断最终行为。**
 
-### 14.4 永久代理
+### 14.4 安全兜底
 
-```txt
-finalChoice === 'permanent_agent'
-```
+仅用于损坏存档、开发跳转或数据迁移失败 —— 也就是既没有最终行为、又不满足隐藏条件时。
 
-在两个代理结局间判断：
+兜底按「稳定边界画像 → 依赖残留画像 → 温柔画像 → 残酷画像 → 默认」的顺序返回常规结局，
+白名单在 `FALLBACK_ALLOWED_VARIANT_IDS`。
 
-```txt
-若 gentleness >= 5
-且 honesty <= 14
-且 selfAcceptance <= 12
-→ soft_illusion
-
-否则
-→ cruel_optimization
-```
-
-不额外要求 `control`，因为最终选择永久代理本身已经是最高级别控制授权。
-
-### 14.5 询问身份但未触发隐藏结局
-
-按以下顺序：
-
-```txt
-若 selfAcceptance >= 12 且 control <= 2
-→ active_disconnection
-
-否则若 selfAcceptance >= 8 且 control <= 7
-→ symbiosis
-
-否则若满足温柔画像
-→ soft_illusion
-
-否则
-→ cruel_optimization
-```
-
-相应结局使用 `preludeVariants` 补充身份回答后的衔接文本。
-
-### 14.6 安全兜底
-
-仅用于旧存档、开发跳转或缺失 `finalChoice`：
-
-```txt
-selfAcceptance >= 10 且 control <= 5
-→ symbiosis
-
-gentleness >= 5 且 honesty <= 14
-→ soft_illusion
-
-honesty >= 11 或 control >= 7
-→ cruel_optimization
-
-默认
-→ symbiosis
-```
-
-兜底不得触发：
+兜底不得返回：
 
 - `mirror_trap`；
-- `active_disconnection`。
+- 任何 `active_disconnection` 变体。
 
-这两个结局都依赖明确最终行为。
+这些结局都依赖明确的最终行为或明确的身份追问路径。
+
+完成存档的校验条件因此不再是「有没有 `finalChoice`」，而是「能不能被现行规则重新推导成
+一个正式结局」：命中兜底就说明这份存档已经不属于现行规则，一律作废重置。
 
 ---
 
@@ -1158,17 +1139,19 @@ honesty >= 11 或 control >= 7
 
 在没有真实统计数据时，不建议显示：
 
-> 本结局达成概率为 16%。
+> 本结局达成概率为 12%。
 
 建议显示：
 
-> 理论路径占比约 16.5%。
+> 理论路径占比约 12.5%。
 
 或者：
 
-> 在当前规则模拟中，约 16.5% 的路径会到达此结局。
+> 在当前规则模拟中，约 12.5% 的路径会到达此结局。
 
 ### 15.2 单独保存概率数据
+
+按**玩家可见结局**保存，不按家族：玩家看到的是变体标题。
 
 `rules/endingRates.ts`：
 
@@ -1176,15 +1159,21 @@ honesty >= 11 或 control >= 7
 import type { EndingRateMap } from '../../../types/story'
 
 export const endingRates = {
-  version: 'draft-2026-07-28',
+  version: 'structural-2026-08-22',
   source: 'structural_estimate',
-  method: 'equal_choice_weight',
+  method: 'equal_choice_weight_exact_convolution',
   rates: {
-    symbiosis: 0.35,
-    active_disconnection: 0.30,
-    soft_illusion: 0.165,
-    cruel_optimization: 0.165,
-    mirror_trap: 0.02,
+    soft_illusion: 0.0989,
+    cruel_optimization: 0.1025,
+    silent_delegation: 0.1251,
+    symbiosis_stable_boundary: 0.1047,
+    symbiosis_rebuilt_boundary: 0.0467,
+    symbiosis_cautious: 0.0836,
+    symbiosis_fragile_boundary: 0.0914,
+    disconnection_active: 0.1047,
+    disconnection_hard_extraction: 0.0939,
+    disconnection_shallow: 0.128,
+    mirror_trap: 0.0204,
   },
 } satisfies EndingRateMap
 ```
@@ -1198,9 +1187,13 @@ type EndingRateMap = {
     | 'observed_local'
   method: string
   sampleSize?: number
-  rates: Record<EndingId, number>
+  rates: Record<EndingVariantId, number>
 }
 ```
+
+生成方式：对正式剧情里 15 个带变量影响的选择节点做精确联合分布卷积
+（无随机、无抽样误差），再按第五章最终确认的 4 个等概率选项展开。
+数值与 `story-source/08-ending-rules.md` §12 保持一致。
 
 显示规则：
 
@@ -1223,6 +1216,41 @@ type EndingRateMap = {
 第一版可以显示理论路径占比，但必须带“理论”或“估算”字样。
 
 不建议为了真实达成率在第一版加入后端、账号或数据收集。
+
+### 15.4 结局页的展示形式
+
+结局页把占比做成一颗胶囊，排在标题区**副标题的右边、同一行**：
+
+```txt
+┌────────────────────────────────────────────────────────────┐
+│                          边界重建                           │
+│         权限真的交出去过。也真的拿了回来。   ( 理论占比 约 5% ) │
+├────────────────────────────────────────────────────────────┤
+│  结局正文                    │  AI 镜像报告                  │
+```
+
+规则：
+
+- **不单独占一行**。结局页是固定舞台，标题区每多一行，两块正文的可读高度就少一行；
+- **副标题相对整个舞台居中**，与标题、正文对在同一条中轴上。
+  实现是三列网格 `1fr auto 1fr`：两侧 fr 列宽度永远相等，副标题落在中间那列。
+  用 flex 横排会把副标题往左推，标题区看上去就歪了；
+- **占比靠到最右**，与两块正文面板的右缘齐平 —— 舞台宽度就是面板宽度，
+  所以它读起来像页眉右上角的一条系统读数；
+- 窄屏（≤768px）改回上下两行居中排：宽度不够时副标题会被挤成三四行，
+  占比也贴不出「与面板右缘齐平」的意思。那时页面已经退回长滚动，
+  多一行不再从正文身上扣高度；
+- 屏幕上的标签是四个字的「理论占比」，与状态面板那几个短标同一量级；
+  文档里描述这个概念时仍称「理论路径占比」，「路径」这层意思在界面上交给悬停说明；
+- 与副标题必须有明显区隔，不能被看成同一句话。当前靠中间的大片留白，
+  加上胶囊的描边 + 等宽字实现；
+- **取整到百分比整数**。一位小数会让这份结构模拟结果看起来像精确的实时统计；
+- **下限锁在 1%**，永远不显示「约 0%」—— 玩家确实抵达了这个结局，一个 0 会读成「这条路不存在」；
+- 悬停说明必须明确否认它是玩家达成率；
+- 措辞约束见 §15.1：断言性文案里不能出现「概率」「达成率」。
+
+取整是纯函数 `toEndingRatePercent`（`src/utils/story/endingRate.ts`），
+界面文案在 `src/data/uiContent.ts` 的 `endingContent`。两者都有单元测试兜住措辞与边界。
 
 ---
 
@@ -1379,13 +1407,16 @@ ch5_close_agent
 9. 扮演选项变量变化不超过设计限制；
 10. 每章选择节点数量符合设计；
 11. 每条结局规则引用的选择 ID 存在；
-12. 五个结局全部可达；
-13. `mirror_trap` 不能通过兜底触发；
-14. 理论概率数据中的结局 ID 与结局文件一致；
-15. 结构估算概率总和接近 1；
-16. 每个条件路由都有 `fallback`；
-17. 所有 `when` 条件均可解析；
-18. 所有剧情文件通过 TypeScript 构建。
+12. 11 个玩家可见结局全部可达；
+13. 每个玩家可见结局都至少有一条正式规则指向它；
+14. 每条规则的家族与变体指向同一处，变体 ID 全局唯一；
+15. 三个最终行为都不修改四变量；
+16. `mirror_trap` 与三个永久关闭变体都不能通过兜底触发；
+17. 理论概率数据的键集合与玩家可见结局一致；
+18. 结构估算概率总和接近 1；
+19. 每个条件路由都有 `fallback`；
+20. 所有 `when` 条件均可解析；
+21. 所有剧情文件通过 TypeScript 构建。
 
 建议同时生成图结构报告：
 
@@ -1403,7 +1434,7 @@ ch5_close_agent
 
 ## 20. 章节转换工作流建议
 
-本节的五个阶段已全部执行完毕：序章与五章、五个结局、路径回声、结局规则与理论占比都已转换并通过验证（见 `docs/00-task-progress.md` 的 C01 / C02 / R01）。以下内容保留，供以后新增章节或结局时复用。
+本节的五个阶段已全部执行完毕：序章与五章、六个结局家族与 11 个玩家可见结局、路径回声、结局规则与理论占比都已转换并通过验证（见 `docs/00-task-progress.md` 的 C01 / C02 / R01）。以下内容保留，供以后新增章节或结局时复用。
 
 不建议一次性把全部正式剧情转换成所有数据文件。最佳方案是“先做样板，再分章转换，最后统一验证”。
 
@@ -1462,7 +1493,7 @@ ch5_close_agent
 
 五章完成后再处理：
 
-- 五个结局文件；
+- 六个结局家族文件；
 - 路径回声库；
 - `endingRules.ts`；
 - `endingRates.ts`。

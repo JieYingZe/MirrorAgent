@@ -8,12 +8,12 @@ import { storyManifest } from '../../data/story'
  *
  * 所有函数都不修改传入对象，一律返回新对象；页面组件不应自行计算变量。
  * 本阶段状态只存在于内存中，但结构必须保持可序列化，
- * schemaVersion 为以后的 localStorage 存档迁移预留（I03）。
+ * schemaVersion 用于让不兼容的旧存档安全失效（I03），版本含义见 types/story.ts。
  */
 
 export function createInitialStoryState(): StoryState {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     currentNodeId: storyManifest.startNodeId,
     stats: createInitialStats(),
     choiceHistory: [],

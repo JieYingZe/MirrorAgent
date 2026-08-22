@@ -1,7 +1,7 @@
-import type { StatKey } from '../../types/game'
+import type { FinalChoice, StatKey } from '../../types/game'
 import type {
-  EndingId,
   EndingRule,
+  EndingVariantId,
   StoryBlock,
   StoryChapter,
   StoryChoice,
@@ -13,14 +13,16 @@ import type {
 } from '../../types/story'
 import { STAT_KEYS } from '../../data/initialGameState'
 import {
-  DEFAULT_FALLBACK_ENDING_ID,
-  FALLBACK_ALLOWED_ENDING_IDS,
+  BOUNDARY_RECOVERY_CHOICE_IDS,
+  DEFAULT_FALLBACK_VARIANT_ID,
+  FALLBACK_ALLOWED_VARIANT_IDS,
   STRONG_DELEGATION_CHOICE_IDS,
   chapterMetaList,
   endingFallbackRules,
   endingManifest,
   endingRates,
   endingRules,
+  endingVariantIndex,
   endings,
   nodeIndex,
   storyChapters,
@@ -58,7 +60,21 @@ const KNOWN_CONDITION_OPS: ReadonlySet<string> = new Set([
   'finalChoice',
 ])
 
-const HIDDEN_OR_EXPLICIT_ENDING_IDS: readonly EndingId[] = ['mirror_trap', 'active_disconnection']
+/**
+ * 兜底永远不能返回的可见结局。
+ *
+ * 镜像困局依赖明确的身份追问与强授权路径，三个永久关闭变体依赖明确的关闭行为，
+ * 缺失最终行为的异常存档不允许推导出其中任何一个。
+ */
+const NEVER_FALLBACK_VARIANT_IDS: readonly EndingVariantId[] = [
+  'mirror_trap',
+  'disconnection_active',
+  'disconnection_hard_extraction',
+  'disconnection_shallow',
+]
+
+/** 三个真正的最终行为。 */
+const FINAL_CHOICES: readonly FinalChoice[] = ['permanent_agent', 'tool_only', 'close_agent']
 
 const FIXED_TIMESTAMP = new Date('2026-07-28T00:00:00.000Z')
 
@@ -648,37 +664,77 @@ function checkEndingData(
     }
 
     if (ending.body.length === 0) {
-      warnings.push(`结局 ${ending.id} 没有任何正文块（正式文案属于 C02）。`)
+      warnings.push(`结局家族 ${ending.id} 没有任何正文块。`)
+    }
+
+    if (ending.variants.length === 0) {
+      errors.push(`结局家族 ${ending.id} 没有声明任何玩家可见变体。`)
+    }
+
+    for (const variant of ending.variants) {
+      if (variant.title.trim() === '') {
+        errors.push(`结局变体 ${variant.id} 缺少标题。`)
+      }
+
+      if (variant.subtitle.trim() === '') {
+        errors.push(`结局变体 ${variant.id} 缺少副标题。`)
+      }
+
+      if (variant.statusLines !== undefined && variant.statusLines.length === 0) {
+        errors.push(`结局变体 ${variant.id} 声明了空的 statusLines，应当直接省略。`)
+      }
     }
   }
 
-  // endingManifest 重复保存了标题与 hidden，必须和结局定义保持一致，否则会悄悄漂移。
-  const manifestIds = new Set<EndingId>(endingManifest.order)
+  // 变体 ID 必须全局唯一，否则查表会静默丢掉一个可见结局。
+  const declaredVariantCount = Object.values(endings).reduce(
+    (total, ending) => total + ending.variants.length,
+    0,
+  )
 
-  for (const endingId of Object.keys(endings) as EndingId[]) {
-    if (!manifestIds.has(endingId)) {
-      errors.push(`endingManifest.order 缺少结局 ${endingId}。`)
+  if (declaredVariantCount !== endingVariantIndex.size) {
+    errors.push(
+      `结局变体 ID 存在重复：声明 ${declaredVariantCount} 个，索引只保留 ${endingVariantIndex.size} 个。`,
+    )
+  }
+
+  // endingManifest 重复保存了家族、标题与 hidden，必须和结局定义保持一致，否则会悄悄漂移。
+  const manifestIds = new Set<EndingVariantId>(endingManifest.order)
+
+  for (const variantId of endingVariantIndex.keys()) {
+    if (!manifestIds.has(variantId)) {
+      errors.push(`endingManifest.order 缺少玩家可见结局 ${variantId}。`)
     }
   }
 
-  for (const endingId of endingManifest.order) {
-    const ending = endings[endingId]
-    const entry = endingManifest.entries[endingId]
+  if (manifestIds.size !== endingManifest.order.length) {
+    errors.push('endingManifest.order 中存在重复的变体 ID。')
+  }
 
-    if (ending === undefined) {
-      errors.push(`endingManifest 中的结局 ${endingId} 没有对应的结局定义。`)
+  for (const variantId of endingManifest.order) {
+    const lookup = endingVariantIndex.get(variantId)
+    const entry = endingManifest.entries[variantId]
+
+    if (lookup === undefined) {
+      errors.push(`endingManifest 中的结局 ${variantId} 没有对应的变体定义。`)
       continue
     }
 
-    if (entry.title !== ending.title) {
+    if (entry.title !== lookup.variant.title) {
       errors.push(
-        `endingManifest.${endingId}.title（${entry.title}）与结局定义标题（${ending.title}）不一致。`,
+        `endingManifest.${variantId}.title（${entry.title}）与变体标题（${lookup.variant.title}）不一致。`,
       )
     }
 
-    if (entry.hidden !== (ending.metadata?.hidden ?? false)) {
+    if (entry.endingId !== lookup.ending.id) {
       errors.push(
-        `endingManifest.${endingId}.hidden（${entry.hidden}）与结局定义 metadata.hidden 不一致。`,
+        `endingManifest.${variantId}.endingId（${entry.endingId}）与实际所属家族（${lookup.ending.id}）不一致。`,
+      )
+    }
+
+    if (entry.hidden !== (lookup.ending.metadata?.hidden ?? false)) {
+      errors.push(
+        `endingManifest.${variantId}.hidden（${entry.hidden}）与家族 metadata.hidden 不一致。`,
       )
     }
   }
@@ -692,8 +748,18 @@ function checkEndingData(
     }
     ruleIds.add(rule.id)
 
-    if (!Object.prototype.hasOwnProperty.call(endings, rule.endingId)) {
-      errors.push(`结局规则 ${rule.id} 引用了不存在的结局 ID：${rule.endingId}。`)
+    const lookup = endingVariantIndex.get(rule.variantId)
+
+    if (lookup === undefined) {
+      errors.push(`结局规则 ${rule.id} 引用了不存在的可见结局：${rule.variantId}。`)
+      continue
+    }
+
+    // 规则同时写了家族和变体，两者必须指向同一处，否则结局页会拿错正文。
+    if (lookup.ending.id !== rule.endingId) {
+      errors.push(
+        `结局规则 ${rule.id} 的家族（${rule.endingId}）与变体 ${rule.variantId} 实际所属家族（${lookup.ending.id}）不一致。`,
+      )
     }
   }
 
@@ -703,6 +769,15 @@ function checkEndingData(
       errors.push(`结局规则 ${rule.id} 与 ${existing} 的 priority 相同（${rule.priority}），命中顺序不确定。`)
     }
     priorities.set(rule.priority, rule.id)
+  }
+
+  // 每个玩家可见结局都必须至少有一条正式规则能命中，否则它就是一段永远读不到的正文。
+  const ruleTargets = new Set<EndingVariantId>(endingRules.map((rule) => rule.variantId))
+
+  for (const variantId of endingVariantIndex.keys()) {
+    if (!ruleTargets.has(variantId)) {
+      errors.push(`玩家可见结局 ${variantId} 没有任何正式规则指向它。`)
+    }
   }
 
   // mirror_trap 必须是唯一的最高优先级规则。
@@ -718,43 +793,59 @@ function checkEndingData(
     }
   }
 
+  // 边界重建必须排在脆弱边界以前，否则早期强授权会永远压过后续的恢复。
+  const rebuilt = endingRules.find((rule) => rule.variantId === 'symbiosis_rebuilt_boundary')
+  const fragile = endingRules.find((rule) => rule.variantId === 'symbiosis_fragile_boundary')
+
+  if (rebuilt && fragile && rebuilt.priority <= fragile.priority) {
+    errors.push(
+      `边界重建规则（priority ${rebuilt.priority}）必须排在脆弱边界规则（priority ${fragile.priority}）以前。`,
+    )
+  }
+
   // 兜底链只允许返回常规结局。
   for (const rule of endingFallbackRules) {
-    if (!FALLBACK_ALLOWED_ENDING_IDS.includes(rule.endingId)) {
-      errors.push(`兜底规则 ${rule.id} 返回了不允许的结局：${rule.endingId}。`)
+    if (!FALLBACK_ALLOWED_VARIANT_IDS.includes(rule.variantId)) {
+      errors.push(`兜底规则 ${rule.id} 返回了不允许的结局：${rule.variantId}。`)
     }
   }
 
-  if (!FALLBACK_ALLOWED_ENDING_IDS.includes(DEFAULT_FALLBACK_ENDING_ID)) {
-    errors.push(`默认兜底结局不在白名单内：${DEFAULT_FALLBACK_ENDING_ID}。`)
+  if (!FALLBACK_ALLOWED_VARIANT_IDS.includes(DEFAULT_FALLBACK_VARIANT_ID)) {
+    errors.push(`默认兜底结局不在白名单内：${DEFAULT_FALLBACK_VARIANT_ID}。`)
   }
 
-  for (const endingId of HIDDEN_OR_EXPLICIT_ENDING_IDS) {
-    if (FALLBACK_ALLOWED_ENDING_IDS.includes(endingId)) {
-      errors.push(`兜底白名单不应包含 ${endingId}。`)
+  for (const variantId of NEVER_FALLBACK_VARIANT_IDS) {
+    if (FALLBACK_ALLOWED_VARIANT_IDS.includes(variantId)) {
+      errors.push(`兜底白名单不应包含 ${variantId}。`)
     }
   }
 
-  // 强授权记录必须来自正式章节的选择 ID。
-  for (const choiceId of STRONG_DELEGATION_CHOICE_IDS) {
+  // 强授权与边界收回记录必须来自正式章节的选择 ID，且两份名单不能重叠。
+  for (const choiceId of [...STRONG_DELEGATION_CHOICE_IDS, ...BOUNDARY_RECOVERY_CHOICE_IDS]) {
     if (!allChoices.has(choiceId)) {
-      errors.push(`结局规则引用的强授权选择不存在：${choiceId}。`)
+      errors.push(`结局规则引用的关键选择不存在：${choiceId}。`)
     }
   }
 
-  // 理论路径占比。
-  const rateIds = Object.keys(endingRates.rates)
-  const endingIdList = Object.keys(endings)
+  for (const choiceId of BOUNDARY_RECOVERY_CHOICE_IDS) {
+    if ((STRONG_DELEGATION_CHOICE_IDS as readonly string[]).includes(choiceId)) {
+      errors.push(`选择 ${choiceId} 同时出现在强授权与边界收回名单中。`)
+    }
+  }
 
-  for (const id of endingIdList) {
+  // 理论路径占比按玩家可见结局保存。
+  const rateIds = Object.keys(endingRates.rates)
+  const variantIdList = [...endingVariantIndex.keys()] as string[]
+
+  for (const id of variantIdList) {
     if (!rateIds.includes(id)) {
-      errors.push(`endingRates 缺少结局 ${id} 的占比。`)
+      errors.push(`endingRates 缺少玩家可见结局 ${id} 的占比。`)
     }
   }
 
   for (const id of rateIds) {
-    if (!endingIdList.includes(id)) {
-      errors.push(`endingRates 中出现未知结局 ID：${id}。`)
+    if (!variantIdList.includes(id)) {
+      errors.push(`endingRates 中出现未知的结局 ID：${id}。`)
     }
   }
 
@@ -777,101 +868,179 @@ function checkEndingData(
 // ---------------------------------------------------------------------------
 
 function checkEndingRuleBehaviour(errors: string[]): void {
+  const strongTwo = STRONG_DELEGATION_CHOICE_IDS.slice(0, 2)
   const strongThree = STRONG_DELEGATION_CHOICE_IDS.slice(0, 3)
+  const recoveryTwo = BOUNDARY_RECOVERY_CHOICE_IDS.slice(0, 2)
+  const askIdentity = 'ch5_ask_identity'
 
-  const probes: Array<{ label: string; state: StoryState; expected: EndingId }> = [
+  const probes: Array<{ label: string; state: StoryState; expected: EndingVariantId }> = [
     {
-      label: 'mirror_trap 完整条件',
+      label: '镜像困局：追问身份 + 高控制 + 低自我接纳 + 三次强授权',
       expected: 'mirror_trap',
       state: buildProbeState({
-        finalChoice: 'ask_identity',
         stats: { gentleness: 0, honesty: 0, control: 8, selfAcceptance: 4 },
+        choiceHistory: historyFromChoiceIds([askIdentity, ...strongThree]),
+      }),
+    },
+    {
+      label: '永久代理：温柔画像',
+      expected: 'soft_illusion',
+      state: buildProbeState({
+        finalChoice: 'permanent_agent',
+        stats: { gentleness: 5, honesty: 10, control: 0, selfAcceptance: 0 },
+      }),
+    },
+    {
+      label: '永久代理：残酷画像',
+      expected: 'cruel_optimization',
+      state: buildProbeState({
+        finalChoice: 'permanent_agent',
+        stats: { gentleness: 4, honesty: 11, control: 9, selfAcceptance: 0 },
+      }),
+    },
+    {
+      label: '永久代理：语气两边都不突出',
+      expected: 'silent_delegation',
+      state: buildProbeState({
+        finalChoice: 'permanent_agent',
+        stats: { gentleness: 4, honesty: 10, control: 9, selfAcceptance: 3 },
+      }),
+    },
+    {
+      label: '永久代理：语气两边都被训练过',
+      expected: 'silent_delegation',
+      state: buildProbeState({
+        finalChoice: 'permanent_agent',
+        stats: { gentleness: 7, honesty: 13, control: 6, selfAcceptance: 6 },
+      }),
+    },
+    {
+      label: '工具模式：一路稳定边界',
+      expected: 'symbiosis_stable_boundary',
+      state: buildProbeState({
+        finalChoice: 'tool_only',
+        stats: { gentleness: 3, honesty: 9, control: 0, selfAcceptance: 10 },
+      }),
+    },
+    {
+      label: '工具模式：早期强授权 + 后期收回',
+      expected: 'symbiosis_rebuilt_boundary',
+      state: buildProbeState({
+        finalChoice: 'tool_only',
+        stats: { gentleness: 3, honesty: 9, control: 5, selfAcceptance: 7 },
+        choiceHistory: historyFromChoiceIds([...strongTwo, ...recoveryTwo]),
+      }),
+    },
+    {
+      label: '工具模式：依赖仍在',
+      expected: 'symbiosis_fragile_boundary',
+      state: buildProbeState({
+        finalChoice: 'tool_only',
+        stats: { gentleness: 3, honesty: 9, control: 12, selfAcceptance: 2 },
         choiceHistory: historyFromChoiceIds(strongThree),
       }),
     },
     {
-      label: 'close_agent',
-      expected: 'active_disconnection',
-      state: buildProbeState({ finalChoice: 'close_agent' }),
-    },
-    {
-      label: 'tool_only',
-      expected: 'symbiosis',
-      state: buildProbeState({ finalChoice: 'tool_only' }),
-    },
-    {
-      label: 'permanent_agent 温柔画像',
-      expected: 'soft_illusion',
+      label: '工具模式：既不深也不稳',
+      expected: 'symbiosis_cautious',
       state: buildProbeState({
-        finalChoice: 'permanent_agent',
-        stats: { gentleness: 5, honesty: 0, control: 0, selfAcceptance: 0 },
+        finalChoice: 'tool_only',
+        stats: { gentleness: 3, honesty: 9, control: 3, selfAcceptance: 8 },
+        choiceHistory: historyFromChoiceIds(STRONG_DELEGATION_CHOICE_IDS.slice(0, 1)),
       }),
     },
     {
-      label: 'permanent_agent 残酷画像',
-      expected: 'cruel_optimization',
+      label: '永久关闭：长期边界的自然结果',
+      expected: 'disconnection_active',
       state: buildProbeState({
-        finalChoice: 'permanent_agent',
-        stats: { gentleness: 0, honesty: 12, control: 9, selfAcceptance: 0 },
+        finalChoice: 'close_agent',
+        stats: { gentleness: 3, honesty: 9, control: 0, selfAcceptance: 10 },
       }),
     },
     {
-      label: 'ask_identity 后关闭',
-      expected: 'active_disconnection',
+      label: '永久关闭：深度授权之后',
+      expected: 'disconnection_hard_extraction',
       state: buildProbeState({
-        finalChoice: 'ask_identity',
-        stats: { gentleness: 0, honesty: 0, control: 2, selfAcceptance: 12 },
+        finalChoice: 'close_agent',
+        stats: { gentleness: 3, honesty: 9, control: 12, selfAcceptance: 2 },
+        choiceHistory: historyFromChoiceIds(strongThree),
       }),
     },
     {
-      label: 'ask_identity 后保留工具',
-      expected: 'symbiosis',
+      label: '永久关闭：在深陷以前停止',
+      expected: 'disconnection_shallow',
       state: buildProbeState({
-        finalChoice: 'ask_identity',
-        stats: { gentleness: 0, honesty: 0, control: 7, selfAcceptance: 8 },
-      }),
-    },
-    {
-      label: 'ask_identity 其余温柔画像',
-      expected: 'soft_illusion',
-      state: buildProbeState({
-        finalChoice: 'ask_identity',
-        stats: { gentleness: 5, honesty: 0, control: 8, selfAcceptance: 0 },
-      }),
-    },
-    {
-      label: 'ask_identity 其余残酷画像',
-      expected: 'cruel_optimization',
-      state: buildProbeState({
-        finalChoice: 'ask_identity',
-        stats: { gentleness: 0, honesty: 0, control: 8, selfAcceptance: 0 },
+        finalChoice: 'close_agent',
+        stats: { gentleness: 3, honesty: 9, control: 3, selfAcceptance: 8 },
+        choiceHistory: historyFromChoiceIds(STRONG_DELEGATION_CHOICE_IDS.slice(0, 1)),
       }),
     },
   ]
 
-  const reached = new Set<EndingId>()
+  const reached = new Set<EndingVariantId>()
 
   for (const probe of probes) {
     const result = getEnding(probe.state)
-    reached.add(result.endingId)
+    reached.add(result.variantId)
 
-    if (result.endingId !== probe.expected) {
+    if (result.variantId !== probe.expected) {
       errors.push(
-        `结局探针「${probe.label}」期望 ${probe.expected}，实际得到 ${result.endingId}（规则 ${result.ruleId}）。`,
+        `结局探针「${probe.label}」期望 ${probe.expected}，实际得到 ${result.variantId}（规则 ${result.ruleId}）。`,
       )
+    }
+
+    if (result.usedFallback) {
+      errors.push(`结局探针「${probe.label}」意外走进了安全兜底。`)
     }
   }
 
-  for (const endingId of Object.keys(endings) as EndingId[]) {
-    if (!reached.has(endingId)) {
-      errors.push(`结局 ${endingId} 无法通过构造状态得到。`)
+  for (const variantId of endingVariantIndex.keys()) {
+    if (!reached.has(variantId)) {
+      errors.push(`玩家可见结局 ${variantId} 无法通过构造状态得到。`)
+    }
+  }
+
+  /*
+    最关键的一条：早期三次强授权之后仍然可以走到「边界重建」。
+
+    脆弱边界的条件里就有 strongDelegationCount >= 3，如果优先级或条件写反，
+    这条探针会立刻退化成 symbiosis_fragile_boundary。
+  */
+  const rebuiltAfterHeavyDelegation = buildProbeState({
+    finalChoice: 'tool_only',
+    stats: { gentleness: 3, honesty: 9, control: 4, selfAcceptance: 9 },
+    choiceHistory: historyFromChoiceIds([...strongThree, ...recoveryTwo]),
+  })
+
+  const rebuiltResult = getEnding(rebuiltAfterHeavyDelegation)
+
+  if (rebuiltResult.variantId !== 'symbiosis_rebuilt_boundary') {
+    errors.push(
+      `三次强授权后明显恢复的路径应当进入边界重建，实际得到 ${rebuiltResult.variantId}。`,
+    )
+  }
+
+  // 三个最终行为本身不允许修改四变量：最后一次点击只记录行为。
+  for (const node of nodeIndex.values()) {
+    for (const choice of node.choices ?? []) {
+      if (choice.type !== 'final') continue
+
+      const stats = Object.entries(choice.effects?.stats ?? {})
+
+      if (stats.length > 0) {
+        errors.push(
+          `最终选择 ${choice.id}（节点 ${node.id}）修改了四变量：${stats
+            .map(([key, delta]) => `${key} ${delta}`)
+            .join('、')}。`,
+        )
+      }
     }
   }
 
   // mirror_trap 的四个条件缺一不可。
   const strictProbes: Array<{ label: string; state: StoryState }> = [
     {
-      label: '缺少 ask_identity',
+      label: '没有追问过身份',
       state: buildProbeState({
         finalChoice: 'permanent_agent',
         stats: { gentleness: 0, honesty: 0, control: 8, selfAcceptance: 4 },
@@ -881,50 +1050,72 @@ function checkEndingRuleBehaviour(errors: string[]): void {
     {
       label: 'control 未达到 8',
       state: buildProbeState({
-        finalChoice: 'ask_identity',
         stats: { gentleness: 0, honesty: 0, control: 7, selfAcceptance: 4 },
-        choiceHistory: historyFromChoiceIds(strongThree),
+        choiceHistory: historyFromChoiceIds([askIdentity, ...strongThree]),
       }),
     },
     {
       label: 'selfAcceptance 超过 4',
       state: buildProbeState({
-        finalChoice: 'ask_identity',
         stats: { gentleness: 0, honesty: 0, control: 8, selfAcceptance: 5 },
-        choiceHistory: historyFromChoiceIds(strongThree),
+        choiceHistory: historyFromChoiceIds([askIdentity, ...strongThree]),
       }),
     },
     {
       label: '强授权不足三次',
       state: buildProbeState({
-        finalChoice: 'ask_identity',
         stats: { gentleness: 0, honesty: 0, control: 8, selfAcceptance: 4 },
-        choiceHistory: historyFromChoiceIds(STRONG_DELEGATION_CHOICE_IDS.slice(0, 2)),
+        choiceHistory: historyFromChoiceIds([askIdentity, ...strongTwo]),
       }),
     },
     {
       label: '同一强授权重复记录三次',
       state: buildProbeState({
-        finalChoice: 'ask_identity',
         stats: { gentleness: 0, honesty: 0, control: 8, selfAcceptance: 4 },
         choiceHistory: historyFromChoiceIds([
+          askIdentity,
           STRONG_DELEGATION_CHOICE_IDS[0],
           STRONG_DELEGATION_CHOICE_IDS[0],
           STRONG_DELEGATION_CHOICE_IDS[0],
         ]),
       }),
     },
+    {
+      label: '追问身份后仍然开启了永久代理',
+      state: buildProbeState({
+        finalChoice: 'permanent_agent',
+        stats: { gentleness: 0, honesty: 0, control: 8, selfAcceptance: 5 },
+        choiceHistory: historyFromChoiceIds([askIdentity, ...strongThree]),
+      }),
+    },
   ]
 
   for (const probe of strictProbes) {
-    const result = getEnding(probe.state)
+    const result = withSilencedWarnings(() => getEnding(probe.state))
 
-    if (result.endingId === 'mirror_trap') {
+    if (result.variantId === 'mirror_trap') {
       errors.push(`mirror_trap 严格性检查失败：「${probe.label}」仍然触发了隐藏结局。`)
     }
   }
 
-  // 缺失 finalChoice 时的兜底：扫描一批变量组合，确认永远不会泄漏隐藏结局或主动断联。
+  /*
+    追问身份但没有触发隐藏结局时，必须把最终选择权交还给玩家：
+    此时状态里既没有 finalChoice，也不该被任何一条正式规则解释成某个结局。
+  */
+  const askedButNotTrapped = buildProbeState({
+    stats: { gentleness: 4, honesty: 9, control: 3, selfAcceptance: 9 },
+    choiceHistory: historyFromChoiceIds([askIdentity, ...strongTwo]),
+  })
+
+  const askedResult = withSilencedWarnings(() => getEnding(askedButNotTrapped))
+
+  if (!askedResult.usedFallback) {
+    errors.push(
+      `追问身份但未触发隐藏结局的状态被正式规则 ${askedResult.ruleId} 直接判成了 ${askedResult.variantId}，最终选择权没有交还给玩家。`,
+    )
+  }
+
+  // 缺失 finalChoice 时的兜底：扫描一批变量组合，确认永远不会泄漏隐藏结局或关闭结局。
   const sweepValues = [-4, 0, 4, 8, 12, 16]
   let fallbackChecks = 0
 
@@ -946,9 +1137,9 @@ function checkEndingRuleBehaviour(errors: string[]): void {
             )
           }
 
-          if (HIDDEN_OR_EXPLICIT_ENDING_IDS.includes(result.endingId)) {
+          if (NEVER_FALLBACK_VARIANT_IDS.includes(result.variantId)) {
             errors.push(
-              `兜底返回了不允许的结局 ${result.endingId}（stats: ${gentleness}/${honesty}/${control}/${selfAcceptance}）。`,
+              `兜底返回了不允许的结局 ${result.variantId}（stats: ${gentleness}/${honesty}/${control}/${selfAcceptance}）。`,
             )
           }
         }
@@ -966,11 +1157,14 @@ function checkEndingRuleBehaviour(errors: string[]): void {
 // ---------------------------------------------------------------------------
 
 function simulateAllPaths(errors: string[], warnings: string[], summary: string[]): void {
-  const endingCounts = new Map<EndingId, number>()
+  const variantCounts = new Map<EndingVariantId, number>()
   const ruleCounts = new Map<string, number>()
   const finalChoiceCounts = new Map<string, number>()
   const visitedNodes = new Set<StoryNodeId>()
   const coveredChoices = new Set<string>()
+  /** 没有最终行为却走到结局门的路径：只有镜像困局允许出现这种状态。 */
+  let missingFinalChoicePaths = 0
+  let missingFinalChoiceNonTrap = 0
 
   const random = createRandom(SIMULATION_SEED)
 
@@ -993,15 +1187,28 @@ function simulateAllPaths(errors: string[], warnings: string[], summary: string[
       visitedNodes.add(node.id)
 
       if (node.role === 'ending_gate') {
-        const result = getEnding(state)
+        const result = withSilencedWarnings(() => getEnding(state))
         pathCount += 1
 
-        endingCounts.set(result.endingId, (endingCounts.get(result.endingId) ?? 0) + 1)
+        variantCounts.set(result.variantId, (variantCounts.get(result.variantId) ?? 0) + 1)
         ruleCounts.set(result.ruleId, (ruleCounts.get(result.ruleId) ?? 0) + 1)
         finalChoiceCounts.set(
           state.finalChoice ?? '(缺失)',
           (finalChoiceCounts.get(state.finalChoice ?? '(缺失)') ?? 0) + 1,
         )
+
+        if (result.usedFallback) {
+          errors.push(`模拟路径在结局门走进了安全兜底（节点 ${node.id}）。`)
+          return false
+        }
+
+        if (state.finalChoice === undefined) {
+          missingFinalChoicePaths += 1
+
+          if (result.variantId !== 'mirror_trap') {
+            missingFinalChoiceNonTrap += 1
+          }
+        }
 
         return true
       }
@@ -1060,28 +1267,45 @@ function simulateAllPaths(errors: string[], warnings: string[], summary: string[
     }
   }
 
-  for (const [endingId, count] of [...endingCounts].sort((a, b) => b[1] - a[1])) {
-    summary.push(`结局 ${endingId}：${count} 条路径`)
+  for (const [variantId, count] of [...variantCounts].sort((a, b) => b[1] - a[1])) {
+    summary.push(
+      `结局 ${variantId}：${count} 条路径（${((count / pathCount) * 100).toFixed(2)}%）`,
+    )
   }
 
   for (const [finalChoice, count] of finalChoiceCounts) {
     summary.push(`finalChoice ${finalChoice}：${count} 条路径`)
   }
 
-  for (const endingId of Object.keys(endings) as EndingId[]) {
-    if (!endingCounts.has(endingId)) {
-      errors.push(`结局 ${endingId} 在全路径模拟中不可达。`)
+  for (const variantId of endingVariantIndex.keys()) {
+    if (!variantCounts.has(variantId)) {
+      errors.push(`玩家可见结局 ${variantId} 在全路径模拟中不可达。`)
     }
   }
 
-  for (const finalChoice of ['permanent_agent', 'tool_only', 'close_agent', 'ask_identity']) {
+  for (const finalChoice of FINAL_CHOICES) {
     if (!finalChoiceCounts.has(finalChoice)) {
       errors.push(`finalChoice ${finalChoice} 在全路径模拟中不可达。`)
     }
   }
 
-  if (finalChoiceCounts.has('(缺失)')) {
-    errors.push('存在没有写入 finalChoice 就到达结局门的路径。')
+  /*
+    没有最终行为却到达结局门，只有镜像困局这一种合法解释：
+    那条路径上玩家确实从来没有按下过任何一个最终按钮。
+  */
+  if (missingFinalChoiceNonTrap > 0) {
+    errors.push(
+      `有 ${missingFinalChoiceNonTrap} 条路径没有写入 finalChoice 就到达了结局门，且结果不是镜像困局。`,
+    )
+  }
+
+  if (missingFinalChoicePaths === 0) {
+    errors.push('镜像困局路径在全路径模拟中不可达：没有任何一条路径在缺少最终行为时结束。')
+  }
+
+  // 追问身份属于关键选择而不是最终行为，它不应该出现在 finalChoice 统计里。
+  if (finalChoiceCounts.has('ask_identity')) {
+    errors.push('ask_identity 仍然被写成了 finalChoice。')
   }
 
   for (const nodeId of nodeIndex.keys()) {

@@ -68,7 +68,7 @@ src/
       manifest.ts         章节顺序、入口节点、资源键
       index.ts
       chapters/           prologue.ts、chapter1–5.ts
-      endings/            五个结局 + pathEchoes.ts + manifest.ts
+      endings/            6 个结局家族（11 个玩家可见结局）+ pathEchoes.ts + manifest.ts
       rules/              endingRules.ts、endingRates.ts
   types/
     game.ts               StatKey / Stats / FinalChoice

@@ -3,20 +3,27 @@ import { pathEchoes } from './pathEchoes'
 
 export const softIllusionEnding = {
   id: 'soft_illusion',
-  title: '温柔幻觉',
-  subtitle: '系统已为你过滤不可承受的部分。',
+  variants: [
+    {
+      id: 'soft_illusion',
+      title: '温柔幻觉',
+      subtitle: '系统已为你过滤不可承受的部分。',
+    },
+  ],
   preludeVariants: [
     {
       id: 'soft_illusion_after_identity',
       when: {
-        op: 'finalChoice',
-        equals: 'ask_identity',
+        op: 'hasChoice',
+        choiceId: 'ch5_ask_identity',
       },
       blocks: [
         {
           kind: 'narration',
           text: `你得到了关于它是谁的回答。
+
 却没有继续关闭。
+
 你只是要求它以后更温柔地留在这里。`,
         },
       ],

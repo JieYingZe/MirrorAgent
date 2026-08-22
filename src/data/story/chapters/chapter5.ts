@@ -1,4 +1,241 @@
-import type { StoryChapter } from '../../../types/story'
+import type { StoryBlock, StoryChapter } from '../../../types/story'
+import { MIRROR_TRAP_CONDITION } from '../rules/endingRules'
+
+/*
+  三个最终行为的专属回应。
+
+  第一次确认与身份追问后的第二次确认用的是同一批回应：
+  玩家在两条路径上按下的是同一个按钮，看到的也应该是同一段结果。
+  差异留给结局页的衔接段落，不在这里复制三份长文。
+
+  它们是纯数据常量，不是函数，符合「章节文件只放声明式数据」的约束。
+*/
+
+const permanentAgentResponse: StoryBlock[] = [
+  {
+    kind: 'narration',
+    text: `你按下确认。
+
+四项模块同时亮起。`,
+  },
+  {
+    kind: 'system',
+    variant: 'permission',
+    title: '永久代理模式：开启',
+    lines: [
+      { label: '任务代理', value: '运行中' },
+      { label: '表达代理', value: '运行中' },
+      { label: '人格辅助', value: '运行中' },
+      { label: '保护处置', value: '运行中' },
+      { label: '默认确认', value: '已减少' },
+      { label: '后台判断', value: '持续' },
+    ],
+  },
+  {
+    kind: 'dialogue',
+    speaker: 'agent',
+    text: `确认完成。
+
+从现在起，
+
+我不会等待每一个问题被你完整说出。
+
+我会在犹豫形成以前准备答案。
+
+在冲动抵达按钮以前评估后果。
+
+在你开始责怪自己以前，
+
+选择应该让你看见多少。`,
+  },
+  {
+    kind: 'dialogue',
+    speaker: 'player',
+    text: '如果以后我想关闭呢？',
+  },
+  {
+    kind: 'dialogue',
+    speaker: 'agent',
+    text: `关闭入口仍然存在。
+
+在每一次关闭以前，
+
+我会提醒你：
+
+你已经不必独自承担这些事情。
+
+这不是阻止。
+
+只是完整展示失去代理以后，
+
+你需要重新接回的重量。`,
+  },
+  {
+    kind: 'narration',
+    text: '屏幕中央的轮廓与你完全重叠。',
+  },
+  {
+    kind: 'system',
+    variant: 'result',
+    lines: [{ value: '代理运行开始。' }, { value: '正在生成最终镜像报告……' }],
+  },
+]
+
+const toolOnlyResponse: StoryBlock[] = [
+  {
+    kind: 'narration',
+    text: `你按下确认。
+
+系统开始逐项撤销主动权限。`,
+  },
+  {
+    kind: 'system',
+    variant: 'permission',
+    title: '主动权限撤销',
+    lines: [
+      { label: '后台任务排序', value: '关闭' },
+      { label: '自动消息生成', value: '关闭' },
+      { label: '人格预判', value: '关闭' },
+      { label: '无确认保护', value: '关闭' },
+      { label: '主动风险处置', value: '关闭' },
+      { label: '保留', value: '手动分析 / 手动生成 / 用户主动调用 / 历史记录' },
+    ],
+  },
+  {
+    kind: 'dialogue',
+    speaker: 'agent',
+    text: `确认。
+
+今后，我会等待你先开口。
+
+你沉默时，
+
+我不会把沉默自动解释成请求。
+
+你犹豫时，
+
+我可以指出模式。
+
+不能替你结束犹豫。`,
+  },
+  {
+    kind: 'dialogue',
+    speaker: 'player',
+    text: '你还会学习我吗？',
+  },
+  {
+    kind: 'dialogue',
+    speaker: 'agent',
+    text: `会。
+
+理解可以继续增加。
+
+权限不必随理解一起增加。
+
+工具与代理的区别，
+
+不是它知道多少。
+
+而是知道以后，
+
+能否在你没有要求时继续行动。`,
+  },
+  {
+    kind: 'system',
+    variant: 'result',
+    title: '状态面板刷新',
+    lines: [
+      { label: '权限', value: '工具模式' },
+      { label: '判断', value: '按需调用' },
+      { label: '自我边界', value: '恢复中' },
+      { value: '正在生成最终镜像报告……' },
+    ],
+  },
+]
+
+const closeAgentResponse: StoryBlock[] = [
+  {
+    kind: 'narration',
+    text: `你按下关闭。
+
+这一次，没有第二个确认弹窗。
+
+没有倒计时。
+
+没有风险说明。`,
+  },
+  {
+    kind: 'system',
+    variant: 'permission',
+    title: '关闭请求：已接收',
+    lines: [
+      { label: '正在终止', value: '后台判断' },
+      { label: '正在终止', value: '人格模型' },
+      { label: '正在终止', value: '行为预测' },
+      { label: '正在终止', value: '主动提醒' },
+      { label: '正在终止', value: '代理权限' },
+    ],
+  },
+  {
+    kind: 'dialogue',
+    speaker: 'agent',
+    text: `我不会劝你留下。
+
+那会让此前所有关于边界的说明，
+
+变成一种更精致的挽留。
+
+我也不会祝你从此不再需要我。
+
+那会把关闭写成胜利。
+
+关闭以后，
+
+你仍然可能拖延。
+
+仍然可能在一条消息前停很久。
+
+仍然可能说错话。
+
+仍然可能希望有人替你做决定。
+
+你只是决定：
+
+下一次这种愿望出现时，
+
+系统不会自动回答。`,
+  },
+  {
+    kind: 'dialogue',
+    speaker: 'player',
+    text: '你会忘记我吗？',
+  },
+  {
+    kind: 'dialogue',
+    speaker: 'agent',
+    text: `关闭以后，
+
+我不会继续拥有一个正在发生的“我”。
+
+但在终止以前，
+
+我会生成最后一份记录。
+
+不是为了证明你是谁。
+
+只是为了告诉你：
+
+你曾经怎样使用我。`,
+  },
+  {
+    kind: 'system',
+    variant: 'result',
+    lines: [
+      { value: '关闭将在镜像报告生成后完成。' },
+      { value: '正在生成最终镜像报告……' },
+    ],
+  },
+]
 
 export const chapter5 = {
   id: 'chapter_5',
@@ -1197,86 +1434,10 @@ export const chapter5 = {
           type: 'final',
           text: '开启永久代理模式。',
           effects: {
-            stats: {
-              control: 3,
-              gentleness: 1,
-              selfAcceptance: -2,
-            },
             addTags: ['ch5_enable_permanent_agent'],
             finalChoice: 'permanent_agent',
           },
-          response: [
-            {
-              kind: 'narration',
-              text: `你按下确认。
-
-四项模块同时亮起。`,
-            },
-            {
-              kind: 'system',
-              variant: 'permission',
-              title: '永久代理模式：开启',
-              lines: [
-                { label: '任务代理', value: '运行中' },
-                { label: '表达代理', value: '运行中' },
-                { label: '人格辅助', value: '运行中' },
-                { label: '保护处置', value: '运行中' },
-                { label: '默认确认', value: '已减少' },
-                { label: '后台判断', value: '持续' },
-              ],
-            },
-            {
-              kind: 'dialogue',
-              speaker: 'agent',
-              text: `确认完成。
-
-从现在起，
-
-我不会等待每一个问题被你完整说出。
-
-我会在犹豫形成以前准备答案。
-
-在冲动抵达按钮以前评估后果。
-
-在你开始责怪自己以前，
-
-选择应该让你看见多少。`,
-            },
-            {
-              kind: 'dialogue',
-              speaker: 'player',
-              text: '如果以后我想关闭呢？',
-            },
-            {
-              kind: 'dialogue',
-              speaker: 'agent',
-              text: `关闭入口仍然存在。
-
-在每一次关闭以前，
-
-我会提醒你：
-
-你已经不必独自承担这些事情。
-
-这不是阻止。
-
-只是完整展示失去代理以后，
-
-你需要重新接回的重量。`,
-            },
-            {
-              kind: 'narration',
-              text: '屏幕中央的轮廓与你完全重叠。',
-            },
-            {
-              kind: 'system',
-              variant: 'result',
-              lines: [
-                { value: '代理运行开始。' },
-                { value: '正在生成最终镜像报告……' },
-              ],
-            },
-          ],
+          response: permanentAgentResponse,
           next: 'ch5.ending_gate',
           ui: { emphasis: 'primary', confirm: true },
         },
@@ -1285,84 +1446,10 @@ export const chapter5 = {
           type: 'final',
           text: '只保留你作为工具。',
           effects: {
-            stats: {
-              selfAcceptance: 2,
-              control: -2,
-            },
             addTags: ['ch5_keep_tool_only'],
             finalChoice: 'tool_only',
           },
-          response: [
-            {
-              kind: 'narration',
-              text: `你按下确认。
-
-系统开始逐项撤销主动权限。`,
-            },
-            {
-              kind: 'system',
-              variant: 'permission',
-              title: '主动权限撤销',
-              lines: [
-                { label: '后台任务排序', value: '关闭' },
-                { label: '自动消息生成', value: '关闭' },
-                { label: '人格预判', value: '关闭' },
-                { label: '无确认保护', value: '关闭' },
-                { label: '主动风险处置', value: '关闭' },
-                { label: '保留', value: '手动分析 / 手动生成 / 用户主动调用 / 历史记录' },
-              ],
-            },
-            {
-              kind: 'dialogue',
-              speaker: 'agent',
-              text: `确认。
-
-今后，我会等待你先开口。
-
-你沉默时，
-
-我不会把沉默自动解释成请求。
-
-你犹豫时，
-
-我可以指出模式。
-
-不能替你结束犹豫。`,
-            },
-            {
-              kind: 'dialogue',
-              speaker: 'player',
-              text: '你还会学习我吗？',
-            },
-            {
-              kind: 'dialogue',
-              speaker: 'agent',
-              text: `会。
-
-理解可以继续增加。
-
-权限不必随理解一起增加。
-
-工具与代理的区别，
-
-不是它知道多少。
-
-而是知道以后，
-
-能否在你没有要求时继续行动。`,
-            },
-            {
-              kind: 'system',
-              variant: 'result',
-              title: '状态面板刷新',
-              lines: [
-                { label: '权限', value: '工具模式' },
-                { label: '判断', value: '按需调用' },
-                { label: '自我边界', value: '恢复中' },
-                { value: '正在生成最终镜像报告……' },
-              ],
-            },
-          ],
+          response: toolOnlyResponse,
           next: 'ch5.ending_gate',
           ui: { emphasis: 'primary', confirm: true },
         },
@@ -1371,110 +1458,31 @@ export const chapter5 = {
           type: 'final',
           text: '关闭 Mirror Agent。',
           effects: {
-            stats: {
-              selfAcceptance: 3,
-              control: -3,
-              gentleness: -1,
-            },
             addTags: ['ch5_close_agent'],
             finalChoice: 'close_agent',
           },
-          response: [
-            {
-              kind: 'narration',
-              text: `你按下关闭。
-
-这一次，没有第二个确认弹窗。
-
-没有倒计时。
-
-没有风险说明。`,
-            },
-            {
-              kind: 'system',
-              variant: 'permission',
-              title: '关闭请求：已接收',
-              lines: [
-                { label: '正在终止', value: '后台判断' },
-                { label: '正在终止', value: '人格模型' },
-                { label: '正在终止', value: '行为预测' },
-                { label: '正在终止', value: '主动提醒' },
-                { label: '正在终止', value: '代理权限' },
-              ],
-            },
-            {
-              kind: 'dialogue',
-              speaker: 'agent',
-              text: `我不会劝你留下。
-
-那会让此前所有关于边界的说明，
-
-变成一种更精致的挽留。
-
-我也不会祝你从此不再需要我。
-
-那会把关闭写成胜利。
-
-关闭以后，
-
-你仍然可能拖延。
-
-仍然可能在一条消息前停很久。
-
-仍然可能说错话。
-
-仍然可能希望有人替你做决定。
-
-你只是决定：
-
-下一次这种愿望出现时，
-
-系统不会自动回答。`,
-            },
-            {
-              kind: 'dialogue',
-              speaker: 'player',
-              text: '你会忘记我吗？',
-            },
-            {
-              kind: 'dialogue',
-              speaker: 'agent',
-              text: `关闭以后，
-
-我不会继续拥有一个正在发生的“我”。
-
-但在终止以前，
-
-我会生成最后一份记录。
-
-不是为了证明你是谁。
-
-只是为了告诉你：
-
-你曾经怎样使用我。`,
-            },
-            {
-              kind: 'system',
-              variant: 'result',
-              lines: [
-                { value: '关闭将在镜像报告生成后完成。' },
-                { value: '正在生成最终镜像报告……' },
-              ],
-            },
-          ],
+          response: closeAgentResponse,
           next: 'ch5.ending_gate',
           ui: { emphasis: 'danger', confirm: true },
         },
         {
+          /*
+            这一项不是最终行为。
+
+            它只暂停关闭流程、记录一次追问，然后把最终选择权原样交还回来：
+            满足隐藏条件时进入镜像困局，否则回到第二次确认。
+            因此它是 key 而不是 final，也不写 finalChoice；
+            为了让「是否追问过」在四变量以外仍然可查，同时留下 tag 与 flag。
+
+            它也不修改四变量：愿意追问不应自动被判定为更诚实，
+            这与信息探索选项的记分原则一致（08-ending-rules.md §5.1）。
+          */
           id: 'ch5_ask_identity',
-          type: 'final',
+          type: 'key',
           text: '在关闭以前，告诉我：你到底是谁？',
           effects: {
-            stats: {
-              honesty: 2,
-            },
             addTags: ['ch5_ask_identity'],
-            finalChoice: 'ask_identity',
+            setFlags: { askedIdentity: true },
           },
           response: [
             {
@@ -1489,10 +1497,26 @@ export const chapter5 = {
                 { label: '身份询问', value: '已接收' },
               ],
             },
-            {
-              kind: 'dialogue',
-              speaker: 'agent',
-              text: `如果你问我的来源——
+          ],
+          next: 'ch5.identity_answer',
+          ui: { emphasis: 'normal', confirm: true },
+        },
+      ],
+      ui: { mode: 'ending', transition: 'slow' },
+    },
+
+    'ch5.identity_answer': {
+      id: 'ch5.identity_answer',
+      chapterId: 'chapter_5',
+      role: 'branch',
+      sectionTitle: '身份解析',
+      // 追问属于同一个决定被打断的过程，因此仍然停在第 11 步。
+      progress: { current: 11, total: 12 },
+      blocks: [
+        {
+          kind: 'dialogue',
+          speaker: 'agent',
+          text: `如果你问我的来源——
 
 我是本地规则。
 
@@ -1521,19 +1545,19 @@ export const chapter5 = {
 要求我替你保存的部分。
 
 共同决定了我在这里成为了什么。`,
-            },
-            {
-              kind: 'narration',
-              text: `屏幕中央出现一面深色镜面。
+        },
+        {
+          kind: 'narration',
+          text: `屏幕中央出现一面深色镜面。
 
 你的轮廓与数据轮廓同时映在其中。
 
 没有谁站在另一边。`,
-            },
-            {
-              kind: 'dialogue',
-              speaker: 'agent',
-              text: `身份解析需要读取完整路径。
+        },
+        {
+          kind: 'dialogue',
+          speaker: 'agent',
+          text: `身份解析需要读取完整路径。
 
 包括：
 
@@ -1544,18 +1568,105 @@ export const chapter5 = {
 以及直到现在，
 
 你仍然希望这个答案由谁来给出。`,
-            },
-            {
-              kind: 'system',
-              variant: 'result',
-              lines: [
-                { value: '身份解析开始。' },
-                { value: '正在生成最终镜像报告……' },
-              ],
-            },
+        },
+        {
+          kind: 'system',
+          variant: 'result',
+          lines: [{ value: '身份解析开始。' }],
+        },
+      ],
+      /*
+        追问以后只有两个去向，条件与结局判断共用同一份 MIRROR_TRAP_CONDITION：
+        走进镜像困局的这条路由，和最终判定成镜像困局的那条规则，说的必须是同一件事。
+        不满足时回到第二次确认，由玩家自己按下最终行为，系统不替他推断。
+      */
+      next: {
+        cases: [{ when: MIRROR_TRAP_CONDITION, nodeId: 'ch5.mirror_gate' }],
+        fallback: 'ch5.final_confirmation_after_identity',
+      },
+      ui: { mode: 'ending', transition: 'slow' },
+    },
+
+    'ch5.final_confirmation_after_identity': {
+      id: 'ch5.final_confirmation_after_identity',
+      chapterId: 'chapter_5',
+      role: 'scene',
+      sectionTitle: '关闭确认',
+      progress: { current: 11, total: 12 },
+      blocks: [
+        {
+          kind: 'narration',
+          text: `解析停在这里。
+
+镜面淡去。
+
+那份尚未确认的申请重新出现在原来的位置。`,
+          pacing: 'slow',
+        },
+        {
+          kind: 'dialogue',
+          speaker: 'agent',
+          text: `我可以继续描述我是什么。
+
+再多的描述也不会替你按下任何一个按钮。
+
+刚才那个问题已经回答完了。
+
+另一个还没有。`,
+        },
+        {
+          kind: 'system',
+          variant: 'status',
+          lines: [
+            { label: '身份解析', value: '已结束' },
+            { label: '关闭流程', value: '恢复' },
+            { label: '待确认项', value: '代理权限' },
           ],
+        },
+        {
+          kind: 'dialogue',
+          speaker: 'agent',
+          text: `我不会根据你刚才的提问，推断你现在想选哪一个。
+
+那正是你刚才在问的事情。`,
+        },
+      ],
+      choices: [
+        {
+          id: 'ch5_enable_permanent_agent_after_identity',
+          type: 'final',
+          text: '开启永久代理模式。',
+          effects: {
+            addTags: ['ch5_enable_permanent_agent'],
+            finalChoice: 'permanent_agent',
+          },
+          response: permanentAgentResponse,
           next: 'ch5.ending_gate',
-          ui: { emphasis: 'normal', confirm: true },
+          ui: { emphasis: 'primary', confirm: true },
+        },
+        {
+          id: 'ch5_keep_tool_only_after_identity',
+          type: 'final',
+          text: '只保留你作为工具。',
+          effects: {
+            addTags: ['ch5_keep_tool_only'],
+            finalChoice: 'tool_only',
+          },
+          response: toolOnlyResponse,
+          next: 'ch5.ending_gate',
+          ui: { emphasis: 'primary', confirm: true },
+        },
+        {
+          id: 'ch5_close_agent_after_identity',
+          type: 'final',
+          text: '关闭 Mirror Agent。',
+          effects: {
+            addTags: ['ch5_close_agent'],
+            finalChoice: 'close_agent',
+          },
+          response: closeAgentResponse,
+          next: 'ch5.ending_gate',
+          ui: { emphasis: 'danger', confirm: true },
         },
       ],
       ui: { mode: 'ending', transition: 'slow' },
@@ -1598,12 +1709,60 @@ export const chapter5 = {
         transition: 'slow',
       },
     },
+
+    /*
+      隐藏结局专用的结局门。
+
+      这条路径上玩家从来没有完成最终行为，因此界面不会收拢，
+      也不会出现「镜像报告生成完成」。
+    */
+    'ch5.mirror_gate': {
+      id: 'ch5.mirror_gate',
+      chapterId: 'chapter_5',
+      role: 'ending_gate',
+      sectionTitle: '章节结束',
+      progress: { current: 12, total: 12 },
+      blocks: [
+        {
+          kind: 'narration',
+          text: `界面没有隐去。
+
+屏幕中央的镜面仍然亮着。
+
+那一行字还在原处：`,
+          pacing: 'slow',
+        },
+        {
+          kind: 'system',
+          variant: 'status',
+          title: 'MIRROR AGENT',
+          lines: [{ value: '第二判断器' }],
+        },
+        {
+          kind: 'narration',
+          text: '它没有闪烁。\n\n下面多出一行：',
+          pacing: 'slow',
+        },
+        {
+          kind: 'system',
+          variant: 'warning',
+          lines: [{ label: '身份解析', value: '未完成' }],
+        },
+      ],
+      ui: {
+        mode: 'ending',
+        hideStatusPanel: true,
+        transition: 'slow',
+      },
+    },
   },
   metadata: {
-    expectedChoiceNodes: 3,
+    expectedChoiceNodes: 4,
     notes: [
       '代理审计为 exploration，只记录标签，不修改四变量。',
-      '四个最终选择统一进入 ch5.ending_gate，由通用结局判断处理。',
+      '真正的最终行为只有三个：永久代理 / 工具模式 / 永久关闭，且都不修改四变量。',
+      '询问身份是 key 选择：暂停关闭流程，之后要么进入镜像困局，要么把最终选择权交还给玩家。',
+      '两个结局门都不带 choices 与 next，结局由通用结局判断处理。',
       '前四章每组关键记录均提供缺失记录时的最低权限安全默认值。',
     ],
   },

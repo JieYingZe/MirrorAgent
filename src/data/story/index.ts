@@ -50,12 +50,21 @@ export const chapterMetaList: readonly StoryChapterMeta[] = [...storyManifest.ch
 
 export { storyManifest } from './manifest'
 export { storyChapters } from './chapters'
-export { endings, endingIds, endingManifest, pathEchoes } from './endings'
+export {
+  endings,
+  endingIds,
+  endingManifest,
+  endingVariantIds,
+  endingVariantIndex,
+  pathEchoes,
+} from './endings'
 export {
   endingRules,
   endingFallbackRules,
-  DEFAULT_FALLBACK_ENDING_ID,
-  FALLBACK_ALLOWED_ENDING_IDS,
+  DEFAULT_FALLBACK_VARIANT_ID,
+  FALLBACK_ALLOWED_VARIANT_IDS,
+  MIRROR_TRAP_CONDITION,
   STRONG_DELEGATION_CHOICE_IDS,
+  BOUNDARY_RECOVERY_CHOICE_IDS,
 } from './rules/endingRules'
 export { endingRates } from './rules/endingRates'

@@ -4,7 +4,7 @@ import { pathEchoes } from '../src/data/story/endings/pathEchoes'
 import { selectEndingPathEchoes } from '../src/utils/story/selectEndingPathEchoes'
 
 const state: StoryState = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   currentNodeId: 'ch5.ending_gate',
   stats: {
     gentleness: 0,

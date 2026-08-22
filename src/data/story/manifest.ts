@@ -7,7 +7,7 @@ import type { StoryManifest } from '../../types/story'
  * 而不是节点 ID。backgroundKey / musicKey 只是资源键，接入留到 V02。
  */
 export const storyManifest = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   startNodeId: 'prologue.initialization',
   chapters: [
     {

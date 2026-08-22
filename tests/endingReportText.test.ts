@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { EndingDefinition, StoryBlock } from '../src/types/story'
+import type { EndingDefinition, EndingVariant, StoryBlock } from '../src/types/story'
 import type { Stats } from '../src/types/game'
 import { blocksToPlainText } from '../src/utils/story/blockText'
 import { buildEndingReportText } from '../src/utils/story/endingReportText'
@@ -87,12 +87,22 @@ describe('blocksToPlainText', () => {
 describe('buildEndingReportText', () => {
   const ending = {
     id: 'symbiosis',
-    title: '共生工具',
+    variants: [],
     report: { statusLines: [], paragraphs: [], variants: [] },
   } as unknown as EndingDefinition
 
+  const variant: EndingVariant = {
+    id: 'symbiosis_cautious',
+    title: '谨慎共生',
+    subtitle: '关系还没有定型。',
+  }
+
   const view: EndingView = {
     ending,
+    variant,
+    title: variant.title,
+    subtitle: variant.subtitle,
+    statusLines: [],
     bodyBlocks: [{ kind: 'narration', text: '结局正文，不进复制。' }],
     reportBlocks: [{ kind: 'narration', text: '报告第一段。' }],
     echoBlocks: [{ kind: 'narration', text: '路径回声。' }],
@@ -100,10 +110,10 @@ describe('buildEndingReportText', () => {
   }
 
   it('follows the section order from docs/03 §6.2', () => {
-    expect(buildEndingReportText(ending, view, makeStats(), LABELS)).toBe(
+    expect(buildEndingReportText(view, makeStats(), LABELS)).toBe(
       [
         '《镜中代理 Mirror Agent》',
-        '我的结局：共生工具',
+        '我的结局：谨慎共生',
         'AI 镜像报告：\n报告第一段。',
         '路径回声。',
         '状态记录：\n- 语气：中性输出\n- 反馈：委婉过滤\n- 权限：工具模式\n- 边界：尚未确认',
@@ -114,14 +124,14 @@ describe('buildEndingReportText', () => {
 
   it('skips empty sections without leaving double blank lines', () => {
     const sparse: EndingView = {
-      ending,
+      ...view,
       bodyBlocks: [],
       reportBlocks: [],
       echoBlocks: [],
       finalLineBlocks: [],
     }
 
-    const text = buildEndingReportText(ending, sparse, makeStats(), LABELS)
+    const text = buildEndingReportText(sparse, makeStats(), LABELS)
 
     expect(text).not.toMatch(/\n{3}/)
     expect(text).toContain('状态记录：')
@@ -129,12 +139,7 @@ describe('buildEndingReportText', () => {
   })
 
   it('tracks the stats it is given', () => {
-    const text = buildEndingReportText(
-      ending,
-      view,
-      makeStats({ control: 8, selfAcceptance: 12 }),
-      LABELS,
-    )
+    const text = buildEndingReportText(view, makeStats({ control: 8, selfAcceptance: 12 }), LABELS)
 
     expect(text).toContain('- 权限：接管倾向')
     expect(text).toContain('- 边界：清晰稳定')
@@ -143,6 +148,7 @@ describe('buildEndingReportText', () => {
   /*
     最重要的一条：复制出去的东西不能带上只该进控制台的信息。
     用正式结局数据跑，避免手写的假 view 恰好绕过问题。
+    每个玩家可见结局都跑一遍：复制出去的标题必须是变体标题。
   */
   it('never leaks rule ids, node ids or raw stat numbers', () => {
     const state = {
@@ -151,17 +157,18 @@ describe('buildEndingReportText', () => {
     }
 
     for (const definition of Object.values(endings)) {
-      const text = buildEndingReportText(
-        definition,
-        buildEndingView(definition, state),
-        state.stats,
-        LABELS,
-      )
+      for (const endingVariant of definition.variants) {
+        const text = buildEndingReportText(
+          buildEndingView(definition, endingVariant, state),
+          state.stats,
+          LABELS,
+        )
 
-      expect(text).not.toMatch(/gentleness|honesty|control|selfAcceptance/i)
-      expect(text).not.toMatch(/\bch\d\.|\brule_|schemaVersion/i)
-      expect(text).toContain(definition.title)
-      expect(text).toContain('状态记录：')
+        expect(text).not.toMatch(/gentleness|honesty|control|selfAcceptance/i)
+        expect(text).not.toMatch(/\bch\d\.|\brule_|schemaVersion/i)
+        expect(text).toContain(endingVariant.title)
+        expect(text).toContain('状态记录：')
+      }
     }
   })
 })

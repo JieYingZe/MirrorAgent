@@ -20,6 +20,10 @@ import { getEnding, getEndingDefinition } from './getEnding'
  *
  * 存档结构版本以 storyManifest.schemaVersion 为唯一来源，当前阶段不做迁移：
  * 版本不一致、结构损坏或引用已失效的存档一律安全清除，按“无存档”处理。
+ * 结局系统改版（v2 → v3）后，旧存档会在版本检查这一步就被拒绝，
+ * 不会用新规则重新推导出一个玩家当初没有做出的结局。
+ *
+ * 只清剧情存档。音频与自动播放等用户偏好在另一个存储键里，这里既不读也不写。
  *
  * 本模块不允许把任何 storage 异常抛给 React 渲染层：
  * 读取 localStorage 这个属性本身、getItem、setItem、removeItem 和 JSON 解析
@@ -63,10 +67,9 @@ function fail<T>(reason: string): Checked<T> {
  * 用 satisfies Record<...> 保证以后新增最终选择或选择类型时这里会编译报错。
  */
 const FINAL_CHOICE_IDS = Object.keys({
-  close_agent: true,
-  ask_identity: true,
   permanent_agent: true,
   tool_only: true,
+  close_agent: true,
 } satisfies Record<FinalChoice, true>) as FinalChoice[]
 
 const CHOICE_TYPES = Object.keys({
@@ -306,20 +309,26 @@ export function validateStorySave(raw: unknown): StorySaveValidation {
     completed: raw.completed,
   }
 
-  // 完成状态的不变量：结局门是唯一的完成检查点，两侧都不允许出现中间态。
+  /*
+    完成状态的不变量：结局门是唯一的完成检查点，两侧都不允许出现中间态。
+
+    这里不再单独要求 finalChoice：镜像困局那条路径上玩家从来没有完成最终行为，
+    没有 finalChoice 才是正确状态。真正的要求是「这份存档能被现行规则重新推导成
+    一个正式结局」—— 命中兜底就说明它已经不属于现行规则，一律作废重置。
+  */
   if (state.completed) {
     if (node.role !== 'ending_gate') {
       return { ok: false, reason: `完成存档没有停在结局门：${state.currentNodeId}。` }
     }
 
-    if (state.finalChoice === undefined) {
-      return { ok: false, reason: '完成存档缺少 finalChoice。' }
-    }
-
     const resolution = getEnding(state)
 
-    if (!getEndingDefinition(resolution.endingId)) {
-      return { ok: false, reason: `完成存档无法重新推导结局：${resolution.endingId}。` }
+    if (resolution.usedFallback) {
+      return { ok: false, reason: `完成存档没有命中任何正式结局规则：${state.currentNodeId}。` }
+    }
+
+    if (!getEndingDefinition(resolution.variantId)) {
+      return { ok: false, reason: `完成存档无法重新推导结局：${resolution.variantId}。` }
     }
   } else if (node.role === 'ending_gate') {
     return { ok: false, reason: '未完成存档停在结局门，属于未提交的中间态。' }

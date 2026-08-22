@@ -1,16 +1,139 @@
 import type { EndingDefinition } from '../../../types/story'
 import { pathEchoes } from './pathEchoes'
 
+/**
+ * 永久关闭家族。
+ *
+ * 关闭本身在三个变体里完全相同，也同样有效。
+ * 变体只说明这次关闭发生在哪一段前史之后：长期边界的自然结果、
+ * 深度授权之后的抽离，还是在真正深陷以前的停止。
+ * 触发条件不在这里，见 ../rules/endingRules.ts。
+ */
 export const activeDisconnectionEnding = {
   id: 'active_disconnection',
-  title: '主动断联',
-  subtitle: '系统关闭。自主权限恢复。',
+  variants: [
+    {
+      id: 'disconnection_active',
+      title: '主动断联',
+      subtitle: '系统关闭。自主权限恢复。',
+      statusLines: [
+        { label: '语气', value: '已终止' },
+        { label: '反馈', value: '已终止' },
+        { label: '权限', value: '全部撤销' },
+        { label: '自我边界', value: '自主但暴露' },
+      ],
+      prelude: [
+        {
+          kind: 'narration',
+          text: `这次关闭不是转折。
+
+它更像一条一直在走的路，走到了尽头。`,
+        },
+      ],
+      report: [
+        {
+          kind: 'narration',
+          text: `你没有把关闭当作胜利。
+
+此前你也没有把使用它当作失败。
+
+权限一直很小，所以撤销的时候没有什么需要用力。
+
+你只是重新承担了答案不稳定、后果不整齐的生活。`,
+        },
+      ],
+    },
+    {
+      id: 'disconnection_hard_extraction',
+      title: '艰难抽离',
+      subtitle: '关闭已经完成。依赖不会一起关闭。',
+      statusLines: [
+        { label: '语气', value: '已终止' },
+        { label: '反馈', value: '已终止' },
+        { label: '权限', value: '全部撤销' },
+        { label: '自我边界', value: '需要重新接回' },
+      ],
+      prelude: [
+        {
+          kind: 'narration',
+          text: `你关掉的不是一个刚认识的工具。
+
+它已经替你做过很多次决定。`,
+        },
+      ],
+      report: [
+        {
+          kind: 'narration',
+          text: `你曾把真实的判断权交出去。
+
+这次关闭仍然有效。
+
+它只是不会把那段时间一并删除。
+
+接下来很长一段时间，你都会在某些时刻先看向屏幕右侧。
+
+那不是失败。
+
+那只是一个被使用了很久的位置，需要时间才空得下来。
+
+这次关闭也可能来自一次突然的抵抗。
+
+它仍然是一项真实发生的权限撤回。`,
+        },
+      ],
+    },
+    {
+      id: 'disconnection_shallow',
+      title: '浅尝辄止',
+      subtitle: '你在深陷以前停了下来。',
+      statusLines: [
+        { label: '语气', value: '已终止' },
+        { label: '反馈', value: '已终止' },
+        { label: '权限', value: '全部撤销' },
+        { label: '自我边界', value: '未及形成' },
+      ],
+      prelude: [
+        {
+          kind: 'narration',
+          text: `你靠近过这段关系。
+
+没有走到最里面。`,
+        },
+      ],
+      report: [
+        {
+          kind: 'narration',
+          text: `你试过把一部分交给它。
+
+也确实觉得那样更容易。
+
+但你没有走到需要用力才能抽身的位置。
+
+这不是先见之明。
+
+你没有建立起一条清楚的边界，只是在它变得难以撤销以前停了下来。
+
+下一次遇到同样的入口，你仍然要重新判断一遍。`,
+        },
+      ],
+      finalLine: [
+        {
+          kind: 'quote',
+          text: `你没有战胜什么。
+
+只是把还没长成习惯的东西，
+提前放下了。`,
+          pacing: 'slow',
+        },
+      ],
+    },
+  ],
   preludeVariants: [
     {
       id: 'active_disconnection_after_identity',
       when: {
-        op: 'finalChoice',
-        equals: 'ask_identity',
+        op: 'hasChoice',
+        choiceId: 'ch5_ask_identity',
       },
       blocks: [
         {
@@ -151,41 +274,6 @@ export const activeDisconnectionEnding = {
 即使自由并不总是带来自豪感，
 
 这些部分仍然需要重新经过你。`,
-      },
-    ],
-    variants: [
-      {
-        id: 'active_disconnection_late_revocation',
-        when: {
-          op: 'all',
-          conditions: [
-            { op: 'stat', stat: 'control', gte: 8 },
-            { op: 'stat', stat: 'selfAcceptance', lte: 7 },
-          ],
-        },
-        blocks: [
-          {
-            kind: 'narration',
-            text: `这次关闭也许来自突然抵抗。
-它仍然是一项真实发生的权限撤回。`,
-          },
-        ],
-      },
-      {
-        id: 'active_disconnection_active_responsibility',
-        when: {
-          op: 'all',
-          conditions: [
-            { op: 'stat', stat: 'selfAcceptance', gte: 12 },
-            { op: 'stat', stat: 'control', lte: 2 },
-          ],
-        },
-        blocks: [
-          {
-            kind: 'narration',
-            text: '你没有把关闭当作胜利。你只是重新承担了答案不稳定、后果不整齐的生活。',
-          },
-        ],
       },
     ],
   },

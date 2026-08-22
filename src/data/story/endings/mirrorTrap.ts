@@ -3,8 +3,13 @@ import { pathEchoes } from './pathEchoes'
 
 export const mirrorTrapEnding = {
   id: 'mirror_trap',
-  title: '镜像困局',
-  subtitle: '身份解析完成。',
+  variants: [
+    {
+      id: 'mirror_trap',
+      title: '镜像困局',
+      subtitle: '身份解析完成。',
+    },
+  ],
   body: [
     {
       kind: 'narration',

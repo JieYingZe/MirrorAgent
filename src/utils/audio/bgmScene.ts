@@ -36,8 +36,8 @@ export const CHAPTER_BGM_TRACKS: Record<string, BgmTrackKey> = {
  * 节点级覆盖：章内换歌的唯一出口。
  *
  * 目前只有第五章后半需要。`ch5.final_record` 是所有路径必经、只有一个入口的
- * merge 节点，适合作为可执行的切换边界；它之后的最终确认与结局门继续沿用同一首，
- * 因此三个节点都写进来，保证「从这里开始一直到 EndingPage 都是 ending」。
+ * merge 节点，适合作为可执行的切换边界；它之后的最终确认、身份追问支线与两个结局门
+ * 继续沿用同一首，因此全部写进来，保证「从这里开始一直到 EndingPage 都是 ending」。
  *
  * 这里刻意写成显式节点清单而不是「第 N 个节点之后」：
  * 剧情节点顺序会随内容调整，显式 ID 改起来会立刻被测试发现。
@@ -45,7 +45,11 @@ export const CHAPTER_BGM_TRACKS: Record<string, BgmTrackKey> = {
 export const NODE_BGM_OVERRIDES: Record<string, BgmTrackKey> = {
   'ch5.final_record': 'ending',
   'ch5.final_confirmation': 'ending',
+  // 身份追问是最终确认被打断的一段，音乐不回到前半。
+  'ch5.identity_answer': 'ending',
+  'ch5.final_confirmation_after_identity': 'ending',
   'ch5.ending_gate': 'ending',
+  'ch5.mirror_gate': 'ending',
 }
 
 /**

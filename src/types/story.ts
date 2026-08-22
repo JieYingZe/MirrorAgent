@@ -19,12 +19,40 @@ export type StoryChoiceId = string
 /** 与 types/game.ts 的 FinalChoice 是同一套值，这里只是规范文档使用的别名。 */
 export type FinalChoiceId = FinalChoice
 
+/**
+ * 结局家族。
+ *
+ * 家族只是正文容器：它保存一整段结局叙事与共用的镜像报告。
+ * 玩家真正看到的标题、副标题与状态摘要来自变体（EndingVariantId），
+ * 一个家族可以带多个变体，避免为了几段差异复制整篇正文。
+ */
 export type EndingId =
+  | 'mirror_trap'
   | 'soft_illusion'
   | 'cruel_optimization'
+  | 'silent_delegation'
   | 'symbiosis'
   | 'active_disconnection'
+
+/**
+ * 玩家可见结局，共 11 个。
+ *
+ * 每次结局判断都恰好命中一个变体：单结果家族的变体 ID 与家族 ID 同名，
+ * 工具模式家族有 4 个，永久关闭家族有 3 个。
+ * 触发条件全部在 src/data/story/rules/endingRules.ts，变体本身不带条件。
+ */
+export type EndingVariantId =
   | 'mirror_trap'
+  | 'soft_illusion'
+  | 'cruel_optimization'
+  | 'silent_delegation'
+  | 'symbiosis_stable_boundary'
+  | 'symbiosis_rebuilt_boundary'
+  | 'symbiosis_cautious'
+  | 'symbiosis_fragile_boundary'
+  | 'disconnection_active'
+  | 'disconnection_hard_extraction'
+  | 'disconnection_shallow'
 
 /** flags 只保存少量可序列化的标记，不保存对象或数组。 */
 export type FlagValue = boolean | string | number
@@ -241,7 +269,7 @@ export type StoryChapterMeta = {
 }
 
 export type StoryManifest = {
-  schemaVersion: 2
+  schemaVersion: 3
   startNodeId: StoryNodeId
   chapters: StoryChapterMeta[]
 }
@@ -260,10 +288,14 @@ export type ChoiceRecord = {
 
 /**
  * 运行进度。本阶段只存在于内存中，但必须保持可序列化，
- * schemaVersion 为以后的 localStorage 存档迁移预留（I03）。
+ * schemaVersion 用于让不兼容的旧存档安全失效（I03）。
+ *
+ * v2 → v3：FinalChoice 去掉了 `ask_identity`，第五章增加了身份回答与第二次确认，
+ * 结局从 5 个家族改为 6 家族 11 变体。v2 存档按新规则重新推导会得到错误结果，
+ * 因此一律作废重置，不做迁移。
  */
 export type StoryState = {
-  schemaVersion: 2
+  schemaVersion: 3
   currentNodeId: StoryNodeId
   stats: Stats
   choiceHistory: ChoiceRecord[]
@@ -286,21 +318,45 @@ export type EndingEchoRule = {
   group?: ChapterId
 }
 
+export type EndingStatusLine = {
+  label: string
+  value: string
+}
+
+/**
+ * 玩家可见结局。
+ *
+ * 变体只保存内容，不保存条件：命中哪一个由结局规则决定（EndingRule.variantId），
+ * 这样「规则」与「正文」仍然只有一个真相来源。
+ *
+ * 省略的字段沿用家族默认值，只有真正需要区分的部分才写在变体里。
+ */
+export type EndingVariant = {
+  id: EndingVariantId
+  title: string
+  subtitle: string
+  /** 覆盖家族的状态摘要；省略时沿用 report.statusLines。 */
+  statusLines?: EndingStatusLine[]
+  /** 变体专属衔接，排在家族正文以前。 */
+  prelude?: StoryBlock[]
+  /** 变体专属报告段落，排在家族报告段落以后。 */
+  report?: StoryBlock[]
+  /** 覆盖家族的收尾句；省略时沿用 finalLine。 */
+  finalLine?: StoryBlock[]
+}
+
 export type EndingDefinition = {
   id: EndingId
-  title: string
-  subtitle?: string
+  /** 至少一个变体；单结果家族只写一个，ID 与家族 ID 同名。 */
+  variants: EndingVariant[]
 
-  /** 同一结局由不同最终选择进入时的衔接文本。 */
+  /** 与最终行为无关的共同衔接，例如「先问过身份再回来确认」。 */
   preludeVariants?: ConditionalBlockGroup[]
   body: StoryBlock[]
 
   report: {
     title?: string
-    statusLines: Array<{
-      label: string
-      value: string
-    }>
+    statusLines: EndingStatusLine[]
     paragraphs: StoryBlock[]
     variants?: ConditionalBlockGroup[]
   }
@@ -316,6 +372,8 @@ export type EndingRule = {
   id: string
   priority: number
   endingId: EndingId
+  /** 命中这条规则时玩家看到的可见结局，必须属于 endingId 这个家族。 */
+  variantId: EndingVariantId
   when: StoryCondition
 }
 
@@ -324,6 +382,9 @@ export type EndingRateMap = {
   source: 'structural_estimate' | 'observed_global' | 'observed_local'
   method: string
   sampleSize?: number
-  /** 原始数据使用 0–1 小数，UI 层再格式化为百分数。 */
-  rates: Record<EndingId, number>
+  /**
+   * 按玩家可见结局保存，不按家族：玩家看到的是变体标题。
+   * 原始数据使用 0–1 小数，UI 层再格式化为百分数。
+   */
+  rates: Record<EndingVariantId, number>
 }

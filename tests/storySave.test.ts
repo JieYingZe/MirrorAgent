@@ -81,6 +81,37 @@ function makeCompletedState(): StoryState {
   }
 }
 
+/**
+ * 镜像困局的完成存档。
+ *
+ * 这条路径上玩家追问了身份、从未完成最终行为，因此 finalChoice 缺失是正确状态。
+ * 选择记录必须是正式剧情里真实存在的那几次，否则校验会先在引用检查这一步失败。
+ */
+function makeMirrorTrapState(): StoryState {
+  const records = [
+    { choiceId: 'ch1_full_planning_authority', nodeId: 'ch1.planning_authority', chapterId: 'chapter_1' },
+    { choiceId: 'ch2_delegate_message', nodeId: 'ch2.sending_interface', chapterId: 'chapter_2' },
+    { choiceId: 'ch3_delegate_real_interaction', nodeId: 'ch3.reality_test', chapterId: 'chapter_3' },
+    { choiceId: 'ch5_ask_identity', nodeId: 'ch5.final_confirmation', chapterId: 'chapter_5' },
+  ]
+
+  return {
+    ...makeRunningState(),
+    currentNodeId: 'ch5.mirror_gate',
+    stats: { gentleness: 3, honesty: 12, control: 11, selfAcceptance: -2 },
+    choiceHistory: records.map((record) => ({
+      ...record,
+      choiceType: 'key' as const,
+      selectedAt: '2026-08-22T00:00:00.000Z',
+    })),
+    tags: ['ch5_ask_identity'],
+    flags: { askedIdentity: true },
+    visitedNodeIds: ['prologue.initialization', 'ch5.identity_answer', 'ch5.mirror_gate'],
+    finalChoice: undefined,
+    completed: true,
+  }
+}
+
 /** 直接写入原始字符串，绕过 saveStorySave，用于构造损坏存档。 */
 function writeRaw(storage: ReturnType<typeof createFakeStorage>, raw: string) {
   storage.store.set(STORY_SAVE_KEY, raw)
@@ -185,6 +216,37 @@ describe('storySave 校验', () => {
     expect(storage.store.has(STORY_SAVE_KEY)).toBe(false)
   })
 
+  /*
+    结局系统改版（v2 → v3）后的存档兼容。
+
+    v2 的完成存档会带上已经不存在的 ask_identity，或者带上一个语义已经变了的
+    finalChoice。必须在版本检查这一步就整份作废，不能用新规则重新推导出一个
+    玩家当初没有做出的结局。
+  */
+  it('让改版以前的 v2 存档整份失效，不做迁移', () => {
+    const storage = useStorage()
+
+    const legacyCompleted = {
+      ...makeCompletedState(),
+      schemaVersion: 2,
+      finalChoice: 'ask_identity',
+    }
+
+    writeRaw(storage, JSON.stringify(legacyCompleted))
+
+    const result = loadStorySave()
+
+    expect(result.status).toBe('invalid')
+    expect(result.status === 'invalid' && result.reason).toContain('存档版本不匹配')
+    expect(storage.store.has(STORY_SAVE_KEY)).toBe(false)
+  })
+
+  it('即使版本号被改成 3，ask_identity 也不再是合法的最终行为', () => {
+    expect(validateStorySave({ ...makeCompletedState(), finalChoice: 'ask_identity' }).ok).toBe(
+      false,
+    )
+  })
+
   it('拒绝使用旧字段的存档', () => {
     const legacy = {
       version: 1,
@@ -265,11 +327,35 @@ describe('storySave 校验', () => {
     // 未完成的存档不能停在结局门。
     expect(validateStorySave({ ...completed, completed: false }).ok).toBe(false)
 
-    // 完成的存档必须停在结局门，并且写入过 finalChoice。
+    // 完成的存档必须停在结局门。
     expect(validateStorySave({ ...running, completed: true }).ok).toBe(false)
+
+    /*
+      普通结局门上必须有最终行为：去掉以后这份存档只能靠兜底解释，
+      而兜底代表「已经不属于现行规则」，应当作废重置。
+    */
     expect(validateStorySave({ ...completed, finalChoice: undefined }).ok).toBe(false)
 
     expect(validateStorySave(completed).ok).toBe(true)
+  })
+
+  /*
+    镜像困局是唯一没有最终行为的正式结局：那条路径上玩家从来没有按下过按钮。
+    它必须能正常存取，否则隐藏结局一刷新就丢。
+  */
+  it('接受停在镜像结局门、没有最终行为的完成存档', () => {
+    expect(validateStorySave(makeMirrorTrapState()).ok).toBe(true)
+  })
+
+  it('拒绝停在镜像结局门但不满足隐藏条件的完成存档', () => {
+    const notTrapped = makeMirrorTrapState()
+
+    expect(
+      validateStorySave({
+        ...notTrapped,
+        stats: { ...notTrapped.stats, selfAcceptance: 12 },
+      }).ok,
+    ).toBe(false)
   })
 })
 
